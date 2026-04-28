@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.4.0", "jupyterlab>=4.0", "hatch-nodejs-version>=0.3.2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jupyter_ai_acp_bridge"
+version = "0.0.1"
+description = "Per-thread ACP harness binding for Jupyter AI"
+readme = "README.md"
+license = { text = "BSD-3-Clause" }
+requires-python = ">=3.10"
+authors = [{ name = "Carl Boettiger", email = "cboettig@berkeley.edu" }]
+classifiers = [
+  "Framework :: Jupyter",
+  "Framework :: Jupyter :: JupyterLab",
+  "License :: OSI Approved :: BSD License",
+  "Programming Language :: Python :: 3",
+]
+dependencies = [
+  "jupyter_server>=2.0",
+  "jupyter_ai_router>=0.0.3",
+  "jupyter_ai_persona_manager>=0.0.8",
+  "jupyter_ai_acp_client>=0.1.0",
+  "jupyterlab_chat>=0.21.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "pytest-asyncio>=0.21", "pytest-tornasync"]
+
+[project.entry-points."jupyter_server.extension_points"]
+jupyter_ai_acp_bridge = "jupyter_ai_acp_bridge.extension:AcpBridgeExtension"
+
+[tool.hatch.build.targets.wheel]
+packages = ["jupyter_ai_acp_bridge"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"jupyter-config/jupyter_server_config.d" = "etc/jupyter/jupyter_server_config.d"
+"install.json" = "share/jupyter/labextensions/@jupyter-ai/acp-bridge/install.json"
+
+[tool.hatch.build.hooks.jupyter-builder]
+dependencies = ["hatch-jupyter-builder>=0.5"]
+build-function = "hatch_jupyter_builder.npm_builder"
+
+[tool.hatch.build.hooks.jupyter-builder.build-kwargs]
+build_cmd = "build:prod"
+npm = ["jlpm"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["jupyter_ai_acp_bridge/tests"]

@@ -1,0 +1,5 @@
+{
+  "packageManager": "python",
+  "packageName": "jupyter_ai_acp_bridge",
+  "uninstallInstructions": "Use pip uninstall jupyter-ai-acp-bridge."
+}
