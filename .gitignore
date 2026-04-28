@@ -1,4 +1,5 @@
 *.bundle.*
+.worktrees/
 lib/
 node_modules/
 *.log
