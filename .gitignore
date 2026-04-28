@@ -1,5 +1,6 @@
 *.bundle.*
 .worktrees/
+.venv/
 lib/
 node_modules/
 *.log
