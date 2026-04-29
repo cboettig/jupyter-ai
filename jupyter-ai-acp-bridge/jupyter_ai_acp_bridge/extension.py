@@ -64,14 +64,19 @@ class AcpBridgeExtension(ExtensionApp):
             (URL + r"/chats/([^/]+)/available-commands", AvailableCommandsHandler, common_kwargs),
         ]
 
-        # Schedule the integration setup once the event loop is running.
+        # Schedule the integration setup. Jupyter Server's
+        # `initialize_settings` runs before the Tornado IOLoop has entered its
+        # run phase, so `asyncio.get_running_loop()` would raise here. We use
+        # `get_event_loop_policy().get_event_loop()` instead — it returns the
+        # loop Tornado is about to run, which is exactly the loop we want to
+        # schedule on. Mirrors the pattern in `jupyter-ai-persona-manager`'s
+        # extension. See PR/discussion linked from issue #1558.
         try:
-            loop = asyncio.get_running_loop()
+            loop = asyncio.get_event_loop_policy().get_event_loop()
         except RuntimeError:
             self.log.warning(
-                "ACP bridge: no running event loop at extension init; "
-                "router integration will not be attached. This usually indicates "
-                "the extension is being imported outside Jupyter Server."
+                "ACP bridge: no event loop available at extension init; "
+                "router integration will not be attached."
             )
         else:
             loop.create_task(self._setup_router_integration())
