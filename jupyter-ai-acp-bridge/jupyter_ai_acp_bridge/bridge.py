@@ -69,3 +69,32 @@ class ChatBridge:
     @property
     def persona(self) -> Any:
         return self._persona
+
+    async def dispatch_message(self, message: Any) -> None:
+        if self._persona is None:
+            raise NotBoundError("no persona to dispatch to")
+        await self._persona.process_message(message)
+
+    async def get_state(self) -> dict:
+        if not self.is_bound:
+            return {"harness_id": None}
+        persona = self._persona
+        base = {"harness_id": self._adapter.id}
+        if persona is None or not hasattr(persona, "get_session_state"):
+            return base
+        return {**base, **(await persona.get_session_state())}
+
+    async def set_model(self, model_id: str) -> None:
+        if self._persona is None:
+            raise NotBoundError("no persona")
+        await self._persona.set_session_model(model_id)
+
+    async def set_mode(self, mode_id: str) -> None:
+        if self._persona is None:
+            raise NotBoundError("no persona")
+        await self._persona.set_session_mode(mode_id)
+
+    async def set_config_option(self, option_id: str, value: Any) -> None:
+        if self._persona is None:
+            raise NotBoundError("no persona")
+        await self._persona.set_session_config_option(option_id, value)
