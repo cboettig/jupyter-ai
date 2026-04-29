@@ -70,3 +70,49 @@ class StateHandler(_BridgeBaseHandler):
             return
         state = await bridge.get_state()
         self.write_json(state)
+
+
+class ModelHandler(_BridgeBaseHandler):
+    async def post(self, chat_id: str) -> None:
+        payload = json.loads(self.request.body or b"{}")
+        bridge = self.bridge_manager.lookup(chat_id)
+        if bridge is None or not bridge.is_bound:
+            self.set_status(404)
+            self.write_json({"error": "no bridge"})
+            return
+        await bridge.set_model(payload["model_id"])
+        self.write_json({"ok": True})
+
+
+class ModeHandler(_BridgeBaseHandler):
+    async def post(self, chat_id: str) -> None:
+        payload = json.loads(self.request.body or b"{}")
+        bridge = self.bridge_manager.lookup(chat_id)
+        if bridge is None or not bridge.is_bound:
+            self.set_status(404)
+            self.write_json({"error": "no bridge"})
+            return
+        await bridge.set_mode(payload["mode_id"])
+        self.write_json({"ok": True})
+
+
+class ConfigOptionHandler(_BridgeBaseHandler):
+    async def post(self, chat_id: str) -> None:
+        payload = json.loads(self.request.body or b"{}")
+        bridge = self.bridge_manager.lookup(chat_id)
+        if bridge is None or not bridge.is_bound:
+            self.set_status(404)
+            self.write_json({"error": "no bridge"})
+            return
+        await bridge.set_config_option(payload["option_id"], payload["value"])
+        self.write_json({"ok": True})
+
+
+class AvailableCommandsHandler(_BridgeBaseHandler):
+    async def get(self, chat_id: str) -> None:
+        bridge = self.bridge_manager.lookup(chat_id)
+        if bridge is None or not bridge.is_bound:
+            self.write_json({"commands": []})
+            return
+        state = await bridge.get_state()
+        self.write_json({"commands": state.get("available_commands", [])})
