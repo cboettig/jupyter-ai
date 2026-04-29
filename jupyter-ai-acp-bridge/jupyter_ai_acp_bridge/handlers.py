@@ -60,3 +60,13 @@ class BindHandler(_BridgeBaseHandler):
             self.write_json({"error": str(exc)})
             return
         self.write_json({"harness_id": harness_id})
+
+
+class StateHandler(_BridgeBaseHandler):
+    async def get(self, chat_id: str) -> None:
+        bridge = self.bridge_manager.lookup(chat_id)
+        if bridge is None:
+            self.write_json({"harness_id": None})
+            return
+        state = await bridge.get_state()
+        self.write_json(state)

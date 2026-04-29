@@ -7,7 +7,7 @@ from tornado.web import Application
 from jupyter_ai_acp_bridge.adapter import HarnessAdapter
 from jupyter_ai_acp_bridge.registry import HarnessRegistry
 from jupyter_ai_acp_bridge.manager import BridgeManager
-from jupyter_ai_acp_bridge.handlers import HarnessesHandler, BindHandler
+from jupyter_ai_acp_bridge.handlers import HarnessesHandler, BindHandler, StateHandler
 
 
 class HarnessesHandlerTest(AsyncHTTPTestCase):
@@ -76,3 +76,20 @@ class BindHandlerTest(AsyncHTTPTestCase):
             body=json.dumps({"harness_id": "claude-code"}),
         )
         assert resp.code == 409
+
+
+class StateHandlerTest(AsyncHTTPTestCase):
+    def get_app(self):
+        registry = HarnessRegistry()
+        self.bridge_manager = BridgeManager()
+        return Application(
+            [(r"/chats/([^/]+)/state", StateHandler, dict(
+                registry=registry, bridge_manager=self.bridge_manager,
+            ))]
+        )
+
+    def test_unbound_returns_null(self):
+        resp = self.fetch("/chats/chat-1/state")
+        assert resp.code == 200
+        body = json.loads(resp.body)
+        assert body == {"harness_id": None}
