@@ -26,6 +26,7 @@ class ChatBridge:
         self.chat_id = chat_id
         self.ychat = ychat
         self._adapter: Optional[HarnessAdapter] = None
+        self._persona: Optional[Any] = None
         if ychat is not None and registry is not None:
             existing = ychat.get_metadata().get(METADATA_KEY)
             if existing and "harness_id" in existing:
@@ -49,11 +50,22 @@ class ChatBridge:
             raise NotBoundError(f"chat {self.chat_id} has no harness bound")
         return self._adapter
 
-    def bind(self, adapter: HarnessAdapter) -> None:
+    def bind(self, adapter: HarnessAdapter, *, parent: Any = None) -> None:
         if self._adapter is not None:
             raise AlreadyBoundError(
                 f"chat {self.chat_id} already bound to {self._adapter.id}"
             )
         self._adapter = adapter
+        self._persona = None
+        if adapter.persona_class is not None:
+            self._persona = adapter.persona_class(
+                parent=parent,
+                ychat=self.ychat,
+                executable=adapter.executable_factory(),
+            )
         if self.ychat is not None:
             self.ychat.set_metadata(METADATA_KEY, {"harness_id": adapter.id})
+
+    @property
+    def persona(self) -> Any:
+        return self._persona

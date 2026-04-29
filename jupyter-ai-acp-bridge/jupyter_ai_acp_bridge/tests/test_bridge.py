@@ -68,3 +68,41 @@ def test_construct_with_existing_metadata_restores_binding():
     bridge = ChatBridge(chat_id="chat-1", ychat=ychat, registry=registry)
     assert bridge.is_bound
     assert bridge.harness_id == "claude-code"
+
+
+class _FakePersona:
+    last_kwargs: dict = {}
+
+    def __init__(self, *, parent=None, ychat=None, executable=None, **kwargs):
+        _FakePersona.last_kwargs = {
+            "parent": parent,
+            "ychat": ychat,
+            "executable": executable,
+            **kwargs,
+        }
+        self.parent = parent
+        self.ychat = ychat
+
+
+def test_bind_instantiates_persona():
+    ychat = _FakeYChat()
+    bridge = ChatBridge(chat_id="chat-1", ychat=ychat)
+    adapter = HarnessAdapter(
+        id="claude-code",
+        display_name="Claude Code",
+        icon="x.svg",
+        executable_factory=lambda: ["claude-code-acp"],
+        persona_class=_FakePersona,
+    )
+    bridge.bind(adapter, parent=object())
+    assert bridge.persona is not None
+    assert bridge.persona.ychat is ychat
+    assert _FakePersona.last_kwargs.get("executable") == ["claude-code-acp"]
+
+
+def test_bind_without_persona_class_keeps_persona_none():
+    ychat = _FakeYChat()
+    bridge = ChatBridge(chat_id="chat-1", ychat=ychat)
+    adapter = _adapter()  # no persona_class
+    bridge.bind(adapter, parent=object())
+    assert bridge.persona is None
