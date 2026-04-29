@@ -92,3 +92,113 @@ def test_bind_chat_suppresses_default_persona():
     assert bridge is not None
     assert bridge.is_bound
     assert pm.default_persona_id is None
+
+
+# ---------------------------------------------------------------------------
+# _make_msg_handler tests
+# ---------------------------------------------------------------------------
+
+import pytest
+
+from .test_bridge import _AsyncFakePersona
+
+
+class _Msg:
+    def __init__(self, mentions=None):
+        self.mentions = mentions
+
+
+def _bound_integration(persona_in_pm: bool = False):
+    """Build an integration with chat-1 already bound to a fake-persona harness.
+
+    If persona_in_pm is True, registers a persona under the id "jupyternaut"
+    in pm.personas so a mention of @jupyternaut suppresses dispatch.
+    """
+    registry = HarnessRegistry()
+    adapter = HarnessAdapter(
+        id="claude-code", display_name="x", icon="x.svg",
+        executable_factory=lambda: ["x"],
+        persona_class=_AsyncFakePersona,
+    )
+    registry.register(adapter)
+    bm = BridgeManager()
+    bridge = bm.get_or_create("chat-1")
+    bridge.bind(adapter, parent=object())
+    pm_personas = {"jupyternaut": object()} if persona_in_pm else {}
+    pm = type("PM", (), {"default_persona_id": "jupyternaut", "personas": pm_personas})()
+    integration = BridgeRouterIntegration(
+        registry=registry, bridge_manager=bm, persona_managers={"chat-1": pm},
+    )
+    return integration, bridge
+
+
+@pytest.mark.asyncio
+async def test_msg_handler_dispatches_when_bound_no_mentions():
+    integration, bridge = _bound_integration()
+    handler = integration._make_msg_handler("chat-1")
+    handler("chat-1", _Msg(mentions=[]))
+    await asyncio.sleep(0.05)
+    assert len(bridge.persona.processed) == 1
+
+
+@pytest.mark.asyncio
+async def test_msg_handler_skips_when_bridge_missing():
+    integration, bridge = _bound_integration()
+    integration.bridge_manager.remove("chat-1")
+    handler = integration._make_msg_handler("chat-1")
+    handler("chat-1", _Msg(mentions=[]))
+    await asyncio.sleep(0.05)
+    # bridge no longer exists; nothing to assert beyond no crash
+
+
+@pytest.mark.asyncio
+async def test_msg_handler_skips_when_bridge_unbound():
+    registry = HarnessRegistry()
+    bm = BridgeManager()
+    bm.get_or_create("chat-1")  # draft state
+    integration = BridgeRouterIntegration(
+        registry=registry, bridge_manager=bm, persona_managers={},
+    )
+    handler = integration._make_msg_handler("chat-1")
+    handler("chat-1", _Msg(mentions=[]))
+    await asyncio.sleep(0.05)
+    bridge = bm.lookup("chat-1")
+    assert bridge is not None
+    assert bridge.persona is None  # adapter never wrapped
+
+
+@pytest.mark.asyncio
+async def test_msg_handler_skips_when_persona_mentioned():
+    integration, bridge = _bound_integration(persona_in_pm=True)
+    handler = integration._make_msg_handler("chat-1")
+    handler("chat-1", _Msg(mentions=["jupyternaut"]))
+    await asyncio.sleep(0.05)
+    assert len(bridge.persona.processed) == 0
+
+
+@pytest.mark.asyncio
+async def test_msg_handler_dispatches_when_mention_unknown():
+    integration, bridge = _bound_integration(persona_in_pm=True)
+    handler = integration._make_msg_handler("chat-1")
+    handler("chat-1", _Msg(mentions=["other-persona"]))
+    await asyncio.sleep(0.05)
+    assert len(bridge.persona.processed) == 1
+
+
+@pytest.mark.asyncio
+async def test_msg_handler_handles_missing_mentions_attr():
+    integration, bridge = _bound_integration()
+    handler = integration._make_msg_handler("chat-1")
+    # Plain object without `mentions`
+    handler("chat-1", object())
+    await asyncio.sleep(0.05)
+    assert len(bridge.persona.processed) == 1
+
+
+@pytest.mark.asyncio
+async def test_msg_handler_handles_none_mentions():
+    integration, bridge = _bound_integration()
+    handler = integration._make_msg_handler("chat-1")
+    handler("chat-1", _Msg(mentions=None))
+    await asyncio.sleep(0.05)
+    assert len(bridge.persona.processed) == 1

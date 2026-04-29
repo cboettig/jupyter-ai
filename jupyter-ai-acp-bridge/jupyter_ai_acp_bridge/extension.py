@@ -66,36 +66,43 @@ class AcpBridgeExtension(ExtensionApp):
 
         # Schedule the integration setup once the event loop is running.
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        loop.create_task(self._setup_router_integration())
+            self.log.warning(
+                "ACP bridge: no running event loop at extension init; "
+                "router integration will not be attached. This usually indicates "
+                "the extension is being imported outside Jupyter Server."
+            )
+        else:
+            loop.create_task(self._setup_router_integration())
 
         elapsed = round((time.time() - start) * 1000)
         self.log.info(f"Initialized {self.name} in {elapsed} ms.")
 
     async def _setup_router_integration(self) -> None:
         """Wait for jupyter-ai-router and jupyter-ai-persona-manager,
-        then create + attach the integration."""
-        while True:
-            ja = self.serverapp.web_app.settings.get("jupyter-ai", {}) if self.serverapp else {}
-            router = ja.get("router")
-            persona_managers = ja.get("persona-managers")
-            if router is not None and persona_managers is not None:
-                break
-            await asyncio.sleep(0.1)
+        then create + attach the integration. Logs any exception that escapes."""
+        try:
+            while True:
+                ja = self.serverapp.web_app.settings.get("jupyter-ai", {}) if self.serverapp else {}
+                router = ja.get("router")
+                persona_managers = ja.get("persona-managers")
+                if router is not None and persona_managers is not None:
+                    break
+                await asyncio.sleep(0.1)
 
-        self.integration = BridgeRouterIntegration(
-            registry=self.registry,
-            bridge_manager=self.bridge_manager,
-            persona_managers=persona_managers,
-        )
-        self.integration.attach(router)
+            self.integration = BridgeRouterIntegration(
+                registry=self.registry,
+                bridge_manager=self.bridge_manager,
+                persona_managers=persona_managers,
+            )
+            self.integration.attach(router)
 
-        # Update the BindHandler kwargs in-place so it can use the integration.
-        # Tornado constructs handlers per request and reads kwargs at that time,
-        # so mutating the dict here is picked up by all subsequent requests.
-        self._bind_kwargs["integration"] = self.integration
+            # Inject the integration into BindHandler's kwargs by mutating
+            # the dict in place. Tornado constructs handlers per request from
+            # this same dict, so subsequent requests will see the new value.
+            self._bind_kwargs["integration"] = self.integration
 
-        self.log.info("ACP bridge attached to router.")
+            self.log.info("ACP bridge attached to router.")
+        except Exception:
+            self.log.exception("ACP bridge integration setup failed.")
