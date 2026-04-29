@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Optional
 
 from tornado.web import RequestHandler
 
@@ -48,20 +48,32 @@ class HarnessesHandler(_BridgeBaseHandler):
 
 
 class BindHandler(_BridgeBaseHandler):
+    def initialize(
+        self,
+        registry: HarnessRegistry,
+        bridge_manager: BridgeManager,
+        integration: Optional[Any] = None,
+    ) -> None:
+        super().initialize(registry, bridge_manager)
+        self.integration = integration
+
     def post(self, chat_id: str) -> None:
         payload = self.parse_json_body(required=("harness_id",))
         if payload is None:
             return
         harness_id = payload["harness_id"]
         try:
-            adapter = self.registry.get(harness_id)
+            self.registry.get(harness_id)
         except HarnessNotFoundError:
             self.set_status(404)
             self.write_json({"error": f"unknown harness {harness_id!r}"})
             return
-        bridge = self.bridge_manager.get_or_create(chat_id)
         try:
-            bridge.bind(adapter)
+            if self.integration is not None:
+                self.integration.bind_chat(chat_id, harness_id)
+            else:
+                bridge = self.bridge_manager.get_or_create(chat_id)
+                bridge.bind(self.registry.get(harness_id))
         except AlreadyBoundError as exc:
             self.set_status(409)
             self.write_json({"error": str(exc)})

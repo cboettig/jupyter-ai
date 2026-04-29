@@ -270,3 +270,36 @@ class UnknownChat404Tests(AsyncHTTPTestCase):
         assert resp.code == 404
         body = json.loads(resp.body)
         assert "missing-chat" in body["error"]
+
+
+class BindHandlerIntegrationTest(AsyncHTTPTestCase):
+    def get_app(self):
+        registry = HarnessRegistry()
+        registry.register(HarnessAdapter(
+            id="claude-code", display_name="Claude", icon="x.svg",
+            executable_factory=lambda: ["x"],
+        ))
+        self.bridge_manager = BridgeManager()
+        self.bind_calls: list = []
+
+        class _FakeIntegration:
+            def bind_chat(_self, chat_id, harness_id):
+                self.bind_calls.append((chat_id, harness_id))
+                bridge = self.bridge_manager.get_or_create(chat_id)
+                bridge.bind(registry.get(harness_id))
+
+        return Application([
+            (r"/chats/([^/]+)/bind", BindHandler, dict(
+                registry=registry,
+                bridge_manager=self.bridge_manager,
+                integration=_FakeIntegration(),
+            )),
+        ])
+
+    def test_bind_uses_integration_when_provided(self):
+        resp = self.fetch(
+            "/chats/chat-1/bind", method="POST",
+            body=json.dumps({"harness_id": "claude-code"}),
+        )
+        assert resp.code == 200
+        assert self.bind_calls == [("chat-1", "claude-code")]
