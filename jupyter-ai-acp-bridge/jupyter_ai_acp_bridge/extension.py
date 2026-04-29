@@ -35,6 +35,11 @@ class AcpBridgeExtension(ExtensionApp):
     def initialize_settings(self) -> None:
         start = time.time()
         self.registry = HarnessRegistry()
+
+        # Register built-in harness adapters.
+        from .harnesses.claude_code import register as register_claude_code
+        register_claude_code(self.registry)
+
         self.bridge_manager = BridgeManager()
         self.integration = None  # set by _setup_router_integration
 
