@@ -97,7 +97,6 @@ def test_bind_instantiates_persona():
     bridge.bind(adapter, parent=object())
     assert bridge.persona is not None
     assert bridge.persona.ychat is ychat
-    assert _FakePersona.last_kwargs.get("executable") == ["claude-code-acp"]
 
 
 def test_bind_without_persona_class_keeps_persona_none():

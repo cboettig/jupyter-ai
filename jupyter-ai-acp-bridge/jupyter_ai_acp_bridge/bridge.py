@@ -61,7 +61,6 @@ class ChatBridge:
             self._persona = adapter.persona_class(
                 parent=parent,
                 ychat=self.ychat,
-                executable=adapter.executable_factory(),
             )
         if self.ychat is not None:
             self.ychat.set_metadata(METADATA_KEY, {"harness_id": adapter.id})
