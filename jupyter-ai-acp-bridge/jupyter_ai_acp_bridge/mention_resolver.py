@@ -7,7 +7,7 @@ from typing import Callable, Optional
 # We emit plain dicts; the persona / acp library serializes them.
 ContentBlock = dict
 
-_MENTION_RE = re.compile(r"@([\w./-]+)")
+_MENTION_RE = re.compile(r"@(cell:[\w-]+|[\w./-]+)")
 
 
 def resolve_mentions(
@@ -16,6 +16,7 @@ def resolve_mentions(
     persona_names: set[str],
     cwd: Optional[str] = None,
     file_resolver: Optional[Callable[[str], Optional[str]]] = None,
+    cell_resolver: Optional[Callable[[str], Optional[dict]]] = None,
 ) -> list[ContentBlock]:
     """Return a list of ACP content-block dicts.
 
@@ -32,6 +33,22 @@ def resolve_mentions(
         # If it's a registered persona, leave inline.
         if name in persona_names:
             continue
+        # Handle cell mentions.
+        if name.startswith("cell:") and cell_resolver is not None:
+            cell_id = name[len("cell:"):]
+            cell_info = cell_resolver(cell_id)
+            if cell_info is not None:
+                if match.start() > cursor:
+                    blocks.append({"type": "text", "text": text[cursor:match.start()]})
+                blocks.append(
+                    {
+                        "type": "resource",
+                        "uri": f"jupyter-cell://{cell_info['notebook_path']}#{cell_id}",
+                        "text": cell_info["source"],
+                    }
+                )
+                cursor = match.end()
+                continue
         # Try file resolution.
         resolved: Optional[str] = None
         if file_resolver is not None:

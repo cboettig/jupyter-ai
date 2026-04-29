@@ -37,3 +37,20 @@ def test_unresolved_at_word_left_as_text():
         file_resolver=lambda p: None,
     )
     assert blocks == [{"type": "text", "text": "what is @nonexistent"}]
+
+
+def test_cell_token_becomes_resource_block():
+    def cell_resolver(cell_id: str):
+        if cell_id == "abc123":
+            return {"notebook_path": "/p/n.ipynb", "source": "print(1)"}
+        return None
+
+    blocks = resolve_mentions(
+        "explain @cell:abc123 please",
+        persona_names=set(),
+        cell_resolver=cell_resolver,
+    )
+    assert any(b.get("type") == "resource" for b in blocks)
+    res = next(b for b in blocks if b["type"] == "resource")
+    assert res["uri"] == "jupyter-cell:///p/n.ipynb#abc123"
+    assert res["text"] == "print(1)"
