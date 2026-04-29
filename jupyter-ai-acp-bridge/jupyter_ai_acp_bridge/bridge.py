@@ -1,9 +1,11 @@
 """ChatBridge: per-chat harness binding state."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from .adapter import HarnessAdapter
+
+METADATA_KEY = "acp_bridge"
 
 
 class AlreadyBoundError(RuntimeError):
@@ -15,9 +17,19 @@ class NotBoundError(RuntimeError):
 
 
 class ChatBridge:
-    def __init__(self, chat_id: str) -> None:
+    def __init__(
+        self,
+        chat_id: str,
+        ychat: Optional[Any] = None,
+        registry: Optional[Any] = None,
+    ) -> None:
         self.chat_id = chat_id
+        self.ychat = ychat
         self._adapter: Optional[HarnessAdapter] = None
+        if ychat is not None and registry is not None:
+            existing = ychat.get_metadata().get(METADATA_KEY)
+            if existing and "harness_id" in existing:
+                self._adapter = registry.get(existing["harness_id"])
 
     @property
     def is_draft(self) -> bool:
@@ -43,3 +55,5 @@ class ChatBridge:
                 f"chat {self.chat_id} already bound to {self._adapter.id}"
             )
         self._adapter = adapter
+        if self.ychat is not None:
+            self.ychat.set_metadata(METADATA_KEY, {"harness_id": adapter.id})

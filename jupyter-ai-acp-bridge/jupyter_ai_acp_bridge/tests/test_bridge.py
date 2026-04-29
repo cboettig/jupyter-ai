@@ -39,3 +39,32 @@ def test_state_query_when_unbound_raises():
     bridge = ChatBridge(chat_id="chat-1")
     with pytest.raises(NotBoundError):
         bridge.adapter
+
+
+class _FakeYChat:
+    def __init__(self) -> None:
+        self._meta: dict = {}
+
+    def get_metadata(self) -> dict:
+        return self._meta
+
+    def set_metadata(self, key: str, value) -> None:
+        self._meta[key] = value
+
+
+def test_bind_writes_metadata():
+    ychat = _FakeYChat()
+    bridge = ChatBridge(chat_id="chat-1", ychat=ychat)
+    bridge.bind(_adapter())
+    assert ychat.get_metadata().get("acp_bridge") == {"harness_id": "claude-code"}
+
+
+def test_construct_with_existing_metadata_restores_binding():
+    ychat = _FakeYChat()
+    ychat.set_metadata("acp_bridge", {"harness_id": "claude-code"})
+    from jupyter_ai_acp_bridge.registry import HarnessRegistry
+    registry = HarnessRegistry()
+    registry.register(_adapter())
+    bridge = ChatBridge(chat_id="chat-1", ychat=ychat, registry=registry)
+    assert bridge.is_bound
+    assert bridge.harness_id == "claude-code"
