@@ -6,7 +6,7 @@ from typing import Any
 
 from tornado.web import RequestHandler
 
-from .bridge import AlreadyBoundError
+from .bridge import AlreadyBoundError, NotBoundError
 from .manager import BridgeManager
 from .registry import HarnessNotFoundError, HarnessRegistry
 
@@ -22,6 +22,20 @@ class _BridgeBaseHandler(RequestHandler):
         self.set_header("Content-Type", "application/json")
         self.write(json.dumps(payload))
 
+    def parse_json_body(self, required: tuple[str, ...] = ()) -> dict | None:
+        try:
+            payload = json.loads(self.request.body or b"{}")
+        except json.JSONDecodeError:
+            self.set_status(400)
+            self.write_json({"error": "invalid JSON"})
+            return None
+        for key in required:
+            if key not in payload:
+                self.set_status(400)
+                self.write_json({"error": f"missing {key}"})
+                return None
+        return payload
+
 
 class HarnessesHandler(_BridgeBaseHandler):
     def get(self) -> None:
@@ -35,17 +49,10 @@ class HarnessesHandler(_BridgeBaseHandler):
 
 class BindHandler(_BridgeBaseHandler):
     def post(self, chat_id: str) -> None:
-        try:
-            payload = json.loads(self.request.body or b"{}")
-        except json.JSONDecodeError:
-            self.set_status(400)
-            self.write_json({"error": "invalid JSON"})
+        payload = self.parse_json_body(required=("harness_id",))
+        if payload is None:
             return
-        harness_id = payload.get("harness_id")
-        if not harness_id:
-            self.set_status(400)
-            self.write_json({"error": "missing harness_id"})
-            return
+        harness_id = payload["harness_id"]
         try:
             adapter = self.registry.get(harness_id)
         except HarnessNotFoundError:
@@ -74,37 +81,70 @@ class StateHandler(_BridgeBaseHandler):
 
 class ModelHandler(_BridgeBaseHandler):
     async def post(self, chat_id: str) -> None:
-        payload = json.loads(self.request.body or b"{}")
-        bridge = self.bridge_manager.lookup(chat_id)
-        if bridge is None or not bridge.is_bound:
-            self.set_status(404)
-            self.write_json({"error": "no bridge"})
+        payload = self.parse_json_body(required=("model_id",))
+        if payload is None:
             return
-        await bridge.set_model(payload["model_id"])
+        bridge = self.bridge_manager.lookup(chat_id)
+        if bridge is None:
+            self.set_status(404)
+            self.write_json({"error": f"chat {chat_id!r} has no bridge"})
+            return
+        if not bridge.is_bound:
+            self.set_status(404)
+            self.write_json({"error": f"chat {chat_id!r} has no harness bound"})
+            return
+        try:
+            await bridge.set_model(payload["model_id"])
+        except NotBoundError as exc:
+            self.set_status(409)
+            self.write_json({"error": str(exc)})
+            return
         self.write_json({"ok": True})
 
 
 class ModeHandler(_BridgeBaseHandler):
     async def post(self, chat_id: str) -> None:
-        payload = json.loads(self.request.body or b"{}")
-        bridge = self.bridge_manager.lookup(chat_id)
-        if bridge is None or not bridge.is_bound:
-            self.set_status(404)
-            self.write_json({"error": "no bridge"})
+        payload = self.parse_json_body(required=("mode_id",))
+        if payload is None:
             return
-        await bridge.set_mode(payload["mode_id"])
+        bridge = self.bridge_manager.lookup(chat_id)
+        if bridge is None:
+            self.set_status(404)
+            self.write_json({"error": f"chat {chat_id!r} has no bridge"})
+            return
+        if not bridge.is_bound:
+            self.set_status(404)
+            self.write_json({"error": f"chat {chat_id!r} has no harness bound"})
+            return
+        try:
+            await bridge.set_mode(payload["mode_id"])
+        except NotBoundError as exc:
+            self.set_status(409)
+            self.write_json({"error": str(exc)})
+            return
         self.write_json({"ok": True})
 
 
 class ConfigOptionHandler(_BridgeBaseHandler):
     async def post(self, chat_id: str) -> None:
-        payload = json.loads(self.request.body or b"{}")
-        bridge = self.bridge_manager.lookup(chat_id)
-        if bridge is None or not bridge.is_bound:
-            self.set_status(404)
-            self.write_json({"error": "no bridge"})
+        payload = self.parse_json_body(required=("option_id", "value"))
+        if payload is None:
             return
-        await bridge.set_config_option(payload["option_id"], payload["value"])
+        bridge = self.bridge_manager.lookup(chat_id)
+        if bridge is None:
+            self.set_status(404)
+            self.write_json({"error": f"chat {chat_id!r} has no bridge"})
+            return
+        if not bridge.is_bound:
+            self.set_status(404)
+            self.write_json({"error": f"chat {chat_id!r} has no harness bound"})
+            return
+        try:
+            await bridge.set_config_option(payload["option_id"], payload["value"])
+        except NotBoundError as exc:
+            self.set_status(409)
+            self.write_json({"error": str(exc)})
+            return
         self.write_json({"ok": True})
 
 

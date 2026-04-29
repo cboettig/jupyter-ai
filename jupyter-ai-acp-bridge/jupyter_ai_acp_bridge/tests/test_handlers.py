@@ -158,3 +158,115 @@ class CapabilityHandlerTests(AsyncHTTPTestCase):
         assert resp.code == 200
         body = json.loads(resp.body)
         assert body["commands"] == [{"name": "/help", "description": "help"}]
+
+
+class JsonErrorTests(AsyncHTTPTestCase):
+    """Verifies POST handlers return 400 for malformed bodies / missing fields."""
+
+    def get_app(self):
+        registry = HarnessRegistry()
+        registry.register(HarnessAdapter(
+            id="claude-code", display_name="x", icon="x.svg",
+            executable_factory=lambda: ["x"],
+        ))
+        self.bridge_manager = BridgeManager()
+        return Application([
+            (r"/chats/([^/]+)/bind", BindHandler, dict(
+                registry=registry, bridge_manager=self.bridge_manager)),
+            (r"/chats/([^/]+)/model", ModelHandler, dict(
+                registry=registry, bridge_manager=self.bridge_manager)),
+        ])
+
+    def test_bind_invalid_json_returns_400(self):
+        resp = self.fetch(
+            "/chats/chat-1/bind", method="POST", body=b"not json",
+        )
+        assert resp.code == 400
+
+    def test_bind_missing_field_returns_400(self):
+        resp = self.fetch(
+            "/chats/chat-1/bind", method="POST", body=json.dumps({}),
+        )
+        assert resp.code == 400
+
+    def test_model_invalid_json_returns_400(self):
+        resp = self.fetch(
+            "/chats/chat-1/model", method="POST", body=b"not json",
+        )
+        assert resp.code == 400
+
+    def test_model_missing_field_returns_400(self):
+        # Bind first
+        self.fetch(
+            "/chats/chat-1/bind", method="POST",
+            body=json.dumps({"harness_id": "claude-code"}),
+        )
+        resp = self.fetch(
+            "/chats/chat-1/model", method="POST", body=json.dumps({}),
+        )
+        assert resp.code == 400
+
+
+class PersonalessBindTests(AsyncHTTPTestCase):
+    """Verifies handlers respond to setter calls on bound-but-persona-less bridges."""
+
+    def get_app(self):
+        registry = HarnessRegistry()
+        # Adapter intentionally has no persona_class
+        registry.register(HarnessAdapter(
+            id="bare", display_name="Bare", icon="x.svg",
+            executable_factory=lambda: ["x"],
+        ))
+        self.bridge_manager = BridgeManager()
+        # Pre-bind so the test endpoints can run
+        bridge = self.bridge_manager.get_or_create("chat-1")
+        bridge.bind(registry.get("bare"))
+        return Application([
+            (r"/chats/([^/]+)/model", ModelHandler, dict(
+                registry=registry, bridge_manager=self.bridge_manager)),
+            (r"/chats/([^/]+)/mode", ModeHandler, dict(
+                registry=registry, bridge_manager=self.bridge_manager)),
+            (r"/chats/([^/]+)/config-option", ConfigOptionHandler, dict(
+                registry=registry, bridge_manager=self.bridge_manager)),
+        ])
+
+    def test_set_model_on_bare_bridge_returns_409(self):
+        resp = self.fetch(
+            "/chats/chat-1/model", method="POST",
+            body=json.dumps({"model_id": "x"}),
+        )
+        assert resp.code == 409
+
+    def test_set_mode_on_bare_bridge_returns_409(self):
+        resp = self.fetch(
+            "/chats/chat-1/mode", method="POST",
+            body=json.dumps({"mode_id": "x"}),
+        )
+        assert resp.code == 409
+
+    def test_set_config_option_on_bare_bridge_returns_409(self):
+        resp = self.fetch(
+            "/chats/chat-1/config-option", method="POST",
+            body=json.dumps({"option_id": "x", "value": "y"}),
+        )
+        assert resp.code == 409
+
+
+class UnknownChat404Tests(AsyncHTTPTestCase):
+    """Verifies the 404 messages for capability handlers include chat_id."""
+
+    def get_app(self):
+        registry = HarnessRegistry()
+        return Application([
+            (r"/chats/([^/]+)/model", ModelHandler, dict(
+                registry=registry, bridge_manager=BridgeManager())),
+        ])
+
+    def test_unknown_chat_404_message_includes_chat_id(self):
+        resp = self.fetch(
+            "/chats/missing-chat/model", method="POST",
+            body=json.dumps({"model_id": "x"}),
+        )
+        assert resp.code == 404
+        body = json.loads(resp.body)
+        assert "missing-chat" in body["error"]
