@@ -40,6 +40,9 @@ class AcpBridgeExtension(ExtensionApp):
         from .harnesses.claude_code import register as register_claude_code
         register_claude_code(self.registry)
 
+        from .harnesses.opencode import register as register_opencode
+        register_opencode(self.registry)
+
         self.bridge_manager = BridgeManager()
         self.integration = None  # set by _setup_router_integration
 
