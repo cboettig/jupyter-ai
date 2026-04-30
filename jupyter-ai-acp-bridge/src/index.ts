@@ -6,6 +6,7 @@ import {
 import { IChatCommandRegistry } from '@jupyter/chat';
 
 import { BridgeSlashCommandProvider } from './providers/BridgeSlashCommandProvider';
+import { BridgeMentionProvider } from './providers/BridgeMentionProvider';
 
 export { HarnessPicker } from './components/HarnessPicker';
 export { HarnessBadge } from './components/HarnessBadge';
@@ -37,4 +38,14 @@ const slashPlugin: JupyterFrontEndPlugin<void> = {
   }
 };
 
-export default [plugin, slashPlugin];
+const mentionPlugin: JupyterFrontEndPlugin<void> = {
+  id: '@jupyter-ai/acp-bridge:mention',
+  description: '@-mention completion for files in the workspace.',
+  autoStart: true,
+  requires: [IChatCommandRegistry],
+  activate: (app: JupyterFrontEnd, registry: IChatCommandRegistry) => {
+    registry.addProvider(new BridgeMentionProvider(app.serviceManager.contents));
+  }
+};
+
+export default [plugin, slashPlugin, mentionPlugin];
