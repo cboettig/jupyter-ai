@@ -70,6 +70,31 @@
   font-style: italic;
 }
 
+/* Augmented "Create a new chat" dialog body — name + harness in one form. */
+.jp-acp-bridge-new-chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 320px;
+  padding: 4px 0;
+}
+
+.jp-acp-bridge-new-chat-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-acp-bridge-new-chat-form input,
+.jp-acp-bridge-new-chat-form select {
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  padding: 4px 6px;
+}
+
 /* Persistent top-bar agent dropdown — Zed-style "+ New chat with..." button. */
 .jp-acp-bridge-agent-menu-widget {
   display: flex;

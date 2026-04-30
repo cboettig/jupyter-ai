@@ -1,10 +1,7 @@
-import * as React from 'react';
-
 import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-import { ReactWidget } from '@jupyterlab/apputils';
 
 import {
   IChatCommandRegistry,
@@ -15,17 +12,17 @@ import {
 import { BridgeSlashCommandProvider } from './providers/BridgeSlashCommandProvider';
 import { BridgeMentionProvider } from './providers/BridgeMentionProvider';
 import { HarnessToolbarItem } from './components/HarnessToolbarItem';
-import { AgentMenu } from './components/AgentMenu';
+import { augmentChatCreateCommand } from './augmentCreate';
 
 export { HarnessPicker } from './components/HarnessPicker';
 export { HarnessBadge } from './components/HarnessBadge';
 export { HarnessHeader } from './components/HarnessHeader';
 export { HarnessToolbarItem } from './components/HarnessToolbarItem';
-export { AgentMenu } from './components/AgentMenu';
 export { ModelSelector } from './components/ModelSelector';
 export { ModeSelector } from './components/ModeSelector';
 export { ConfigOptionsSelector } from './components/ConfigOptionsSelector';
-export { newChatWithHarness } from './newChat';
+export { showNewChatDialog } from './newChatDialog';
+export { bindWithRetry } from './newChat';
 export * from './types';
 export * as bridgeApi from './api';
 
@@ -78,17 +75,21 @@ const toolbarPlugin: JupyterFrontEndPlugin<IInputToolbarRegistryFactory> = {
   })
 };
 
-const agentMenuPlugin: JupyterFrontEndPlugin<void> = {
-  id: '@jupyter-ai/acp-bridge:agent-menu',
+const augmentCreatePlugin: JupyterFrontEndPlugin<void> = {
+  id: '@jupyter-ai/acp-bridge:augment-create',
   description:
-    'Persistent top-bar dropdown that creates a new chat bound to the ' +
-    'selected ACP harness (Zed-style).',
+    'Replaces the standard "Create a new chat" dialog with one that asks ' +
+    'for both name and harness in a single step. Hits every chat-creation ' +
+    'entry point (sidebar +, launcher card, command palette).',
   autoStart: true,
   activate: (app: JupyterFrontEnd) => {
-    const widget = ReactWidget.create(React.createElement(AgentMenu, { app }));
-    widget.id = 'jp-acp-bridge-agent-menu';
-    widget.addClass('jp-acp-bridge-agent-menu-widget');
-    app.shell.add(widget, 'top', { rank: 1000 });
+    // Wait for all extensions to register their commands before we
+    // override the chat extension's create command.
+    void app.restored.then(() =>
+      augmentChatCreateCommand(app).catch(err =>
+        console.error('[acp-bridge] augment-create failed:', err)
+      )
+    );
   }
 };
 
@@ -97,5 +98,5 @@ export default [
   slashPlugin,
   mentionPlugin,
   toolbarPlugin,
-  agentMenuPlugin
+  augmentCreatePlugin
 ];
