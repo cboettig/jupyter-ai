@@ -1,27 +1,31 @@
+import * as React from 'react';
+
 import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
+import { ReactWidget } from '@jupyterlab/apputils';
 
 import {
   IChatCommandRegistry,
   IInputToolbarRegistryFactory,
   InputToolbarRegistry
 } from '@jupyter/chat';
-import { ILauncher } from '@jupyterlab/launcher';
 
 import { BridgeSlashCommandProvider } from './providers/BridgeSlashCommandProvider';
 import { BridgeMentionProvider } from './providers/BridgeMentionProvider';
 import { HarnessToolbarItem } from './components/HarnessToolbarItem';
-import { registerLauncherCards } from './launcher';
+import { AgentMenu } from './components/AgentMenu';
 
 export { HarnessPicker } from './components/HarnessPicker';
 export { HarnessBadge } from './components/HarnessBadge';
 export { HarnessHeader } from './components/HarnessHeader';
 export { HarnessToolbarItem } from './components/HarnessToolbarItem';
+export { AgentMenu } from './components/AgentMenu';
 export { ModelSelector } from './components/ModelSelector';
 export { ModeSelector } from './components/ModeSelector';
 export { ConfigOptionsSelector } from './components/ConfigOptionsSelector';
+export { newChatWithHarness } from './newChat';
 export * from './types';
 export * as bridgeApi from './api';
 
@@ -74,17 +78,17 @@ const toolbarPlugin: JupyterFrontEndPlugin<IInputToolbarRegistryFactory> = {
   })
 };
 
-const launcherPlugin: JupyterFrontEndPlugin<void> = {
-  id: '@jupyter-ai/acp-bridge:launcher',
+const agentMenuPlugin: JupyterFrontEndPlugin<void> = {
+  id: '@jupyter-ai/acp-bridge:agent-menu',
   description:
-    'Adds one launcher card per ACP harness; clicking creates a new ' +
-    'chat already bound to that harness.',
+    'Persistent top-bar dropdown that creates a new chat bound to the ' +
+    'selected ACP harness (Zed-style).',
   autoStart: true,
-  requires: [ILauncher],
-  activate: (app: JupyterFrontEnd, launcher: ILauncher) => {
-    registerLauncherCards(app, launcher).catch(err =>
-      console.error('Failed to register ACP harness launcher cards:', err)
-    );
+  activate: (app: JupyterFrontEnd) => {
+    const widget = ReactWidget.create(React.createElement(AgentMenu, { app }));
+    widget.id = 'jp-acp-bridge-agent-menu';
+    widget.addClass('jp-acp-bridge-agent-menu-widget');
+    app.shell.add(widget, 'top', { rank: 1000 });
   }
 };
 
@@ -93,5 +97,5 @@ export default [
   slashPlugin,
   mentionPlugin,
   toolbarPlugin,
-  launcherPlugin
+  agentMenuPlugin
 ];
