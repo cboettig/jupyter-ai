@@ -52,19 +52,13 @@ class AcpBridgeExtension(ExtensionApp):
         self.settings["jupyter-ai"]["acp-bridge-registry"] = self.registry
         self.settings["jupyter-ai"]["acp-bridge-manager"] = self.bridge_manager
 
-        bind_kwargs = {
-            "registry": self.registry,
-            "bridge_manager": self.bridge_manager,
-            "integration": None,  # filled in once integration is ready (BindHandler reads from self.integration via initialize-time arg; for simplicity we mutate this dict)
-        }
         common_kwargs = {
             "registry": self.registry,
             "bridge_manager": self.bridge_manager,
         }
-        self._bind_kwargs = bind_kwargs
         self.handlers = [
             (URL + r"/harnesses", HarnessesHandler, common_kwargs),
-            (URL + r"/chats/([^/]+)/bind", BindHandler, bind_kwargs),
+            (URL + r"/chats/([^/]+)/bind", BindHandler, common_kwargs),
             (URL + r"/chats/([^/]+)/state", StateHandler, common_kwargs),
             (URL + r"/chats/([^/]+)/model", ModelHandler, common_kwargs),
             (URL + r"/chats/([^/]+)/mode", ModeHandler, common_kwargs),
@@ -97,24 +91,34 @@ class AcpBridgeExtension(ExtensionApp):
         then create + attach the integration. Logs any exception that escapes."""
         try:
             while True:
-                ja = self.serverapp.web_app.settings.get("jupyter-ai", {}) if self.serverapp else {}
+                settings = (
+                    self.serverapp.web_app.settings if self.serverapp else {}
+                )
+                ja = settings.get("jupyter-ai", {})
                 router = ja.get("router")
                 persona_managers = ja.get("persona-managers")
-                if router is not None and persona_managers is not None:
+                file_id_manager = settings.get("file_id_manager")
+                if (
+                    router is not None
+                    and persona_managers is not None
+                    and file_id_manager is not None
+                ):
                     break
                 await asyncio.sleep(0.1)
-
             self.integration = BridgeRouterIntegration(
                 registry=self.registry,
                 bridge_manager=self.bridge_manager,
                 persona_managers=persona_managers,
+                file_id_manager=file_id_manager,
             )
             self.integration.attach(router)
 
-            # Inject the integration into BindHandler's kwargs by mutating
-            # the dict in place. Tornado constructs handlers per request from
-            # this same dict, so subsequent requests will see the new value.
-            self._bind_kwargs["integration"] = self.integration
+            # Publish the integration in app settings so handlers can pick
+            # it up at request time (a kwargs-mutation approach proved
+            # unreliable across Tornado versions).
+            if self.serverapp is not None:
+                ja = self.serverapp.web_app.settings.setdefault("jupyter-ai", {})
+                ja["acp-bridge-integration"] = self.integration
 
             self.log.info("ACP bridge attached to router.")
         except Exception:

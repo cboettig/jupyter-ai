@@ -18,6 +18,20 @@ class _BridgeBaseHandler(RequestHandler):
         self.registry = registry
         self.bridge_manager = bridge_manager
 
+    @property
+    def integration(self) -> Any:
+        return self.settings.get("jupyter-ai", {}).get("acp-bridge-integration")
+
+    def lookup_bridge(self, chat_path: str) -> Any:
+        """Resolve a frontend chat_path to the bridge, going via the
+        integration's `resolve()` method (which translates path -> room_id)."""
+        if self.integration is None:
+            return None
+        room_id, _ychat = self.integration.resolve(chat_path)
+        if room_id is None:
+            return None
+        return self.bridge_manager.lookup(room_id)
+
     def write_json(self, payload: Any) -> None:
         self.set_header("Content-Type", "application/json")
         self.write(json.dumps(payload))
@@ -48,14 +62,12 @@ class HarnessesHandler(_BridgeBaseHandler):
 
 
 class BindHandler(_BridgeBaseHandler):
-    def initialize(
-        self,
-        registry: HarnessRegistry,
-        bridge_manager: BridgeManager,
-        integration: Optional[Any] = None,
-    ) -> None:
-        super().initialize(registry, bridge_manager)
-        self.integration = integration
+    @property
+    def integration(self) -> Any:
+        # Look up at request time from app settings, so the integration
+        # becomes visible to handlers as soon as `_setup_router_integration`
+        # finishes (which happens asynchronously after extension init).
+        return self.settings.get("jupyter-ai", {}).get("acp-bridge-integration")
 
     def post(self, chat_id: str) -> None:
         payload = self.parse_json_body(required=("harness_id",))
@@ -68,14 +80,26 @@ class BindHandler(_BridgeBaseHandler):
             self.set_status(404)
             self.write_json({"error": f"unknown harness {harness_id!r}"})
             return
+        if self.integration is None:
+            # Fail loudly: a bind that bypasses the integration would create a
+            # bridge with no ychat, which crashes downstream when persona
+            # initialization tries to read ychat.awareness.
+            self.set_status(503)
+            self.write_json({
+                "error": (
+                    "ACP bridge integration not yet attached. "
+                    "Wait a moment and retry, or check the server log."
+                )
+            })
+            return
         try:
-            if self.integration is not None:
-                self.integration.bind_chat(chat_id, harness_id)
-            else:
-                bridge = self.bridge_manager.get_or_create(chat_id)
-                bridge.bind(self.registry.get(harness_id))
+            self.integration.bind_chat(chat_id, harness_id)
         except AlreadyBoundError as exc:
             self.set_status(409)
+            self.write_json({"error": str(exc)})
+            return
+        except RuntimeError as exc:
+            self.set_status(404)
             self.write_json({"error": str(exc)})
             return
         self.write_json({"harness_id": harness_id})
@@ -83,7 +107,7 @@ class BindHandler(_BridgeBaseHandler):
 
 class StateHandler(_BridgeBaseHandler):
     async def get(self, chat_id: str) -> None:
-        bridge = self.bridge_manager.lookup(chat_id)
+        bridge = self.lookup_bridge(chat_id)
         if bridge is None:
             self.write_json({"harness_id": None})
             return
@@ -96,12 +120,8 @@ class ModelHandler(_BridgeBaseHandler):
         payload = self.parse_json_body(required=("model_id",))
         if payload is None:
             return
-        bridge = self.bridge_manager.lookup(chat_id)
-        if bridge is None:
-            self.set_status(404)
-            self.write_json({"error": f"chat {chat_id!r} has no bridge"})
-            return
-        if not bridge.is_bound:
+        bridge = self.lookup_bridge(chat_id)
+        if bridge is None or not bridge.is_bound:
             self.set_status(404)
             self.write_json({"error": f"chat {chat_id!r} has no harness bound"})
             return
@@ -119,12 +139,8 @@ class ModeHandler(_BridgeBaseHandler):
         payload = self.parse_json_body(required=("mode_id",))
         if payload is None:
             return
-        bridge = self.bridge_manager.lookup(chat_id)
-        if bridge is None:
-            self.set_status(404)
-            self.write_json({"error": f"chat {chat_id!r} has no bridge"})
-            return
-        if not bridge.is_bound:
+        bridge = self.lookup_bridge(chat_id)
+        if bridge is None or not bridge.is_bound:
             self.set_status(404)
             self.write_json({"error": f"chat {chat_id!r} has no harness bound"})
             return
@@ -142,12 +158,8 @@ class ConfigOptionHandler(_BridgeBaseHandler):
         payload = self.parse_json_body(required=("option_id", "value"))
         if payload is None:
             return
-        bridge = self.bridge_manager.lookup(chat_id)
-        if bridge is None:
-            self.set_status(404)
-            self.write_json({"error": f"chat {chat_id!r} has no bridge"})
-            return
-        if not bridge.is_bound:
+        bridge = self.lookup_bridge(chat_id)
+        if bridge is None or not bridge.is_bound:
             self.set_status(404)
             self.write_json({"error": f"chat {chat_id!r} has no harness bound"})
             return
@@ -162,7 +174,7 @@ class ConfigOptionHandler(_BridgeBaseHandler):
 
 class AvailableCommandsHandler(_BridgeBaseHandler):
     async def get(self, chat_id: str) -> None:
-        bridge = self.bridge_manager.lookup(chat_id)
+        bridge = self.lookup_bridge(chat_id)
         if bridge is None or not bridge.is_bound:
             self.write_json({"commands": []})
             return

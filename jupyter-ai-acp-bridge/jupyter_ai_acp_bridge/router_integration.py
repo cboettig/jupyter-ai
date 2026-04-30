@@ -1,4 +1,13 @@
-"""Bridge integration with jupyter-ai-router."""
+"""Bridge integration with jupyter-ai-router and jupyter-ai-persona-manager.
+
+Chat-identity resolution is handled exactly the way `jupyter-ai-acp-client`
+does it: the frontend sends `chat_path`; the backend translates that to a
+`file_id` via the `file_id_manager`, synthesizes the canonical `room_id` as
+`text:chat:<file_id>`, and looks up the per-chat persona-manager (which
+owns the `YChat` instance). This is the only resolution path; no caching,
+no fallbacks. The chat-init observer is used only to restore a binding
+from chat metadata when a chat reopens.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -9,72 +18,51 @@ from .registry import HarnessNotFoundError, HarnessRegistry
 
 
 class BridgeRouterIntegration:
-    """Bridges between jupyter-ai-router observers and the per-chat ChatBridge.
-
-    Created once per Jupyter Server. `attach(router)` registers the chat-init
-    observer; that observer in turn registers a per-chat msg observer when each
-    chat connects.
-
-    Note on chat identity: the router's `chat_init` and `chat_msg` callbacks
-    use a `room_id` of the form `text:chat:<file-id>`. The frontend's REST
-    requests, on the other hand, use the chat *path* (e.g. `foo.chat`). We
-    register each `ChatBridge` under both keys so lookups by either work, and
-    we maintain a `room_id -> chat_path` mapping for the msg-dispatch path.
-    """
-
     def __init__(
         self,
         *,
         registry: HarnessRegistry,
         bridge_manager: BridgeManager,
         persona_managers: dict[str, Any],
+        file_id_manager: Any = None,
     ) -> None:
         self.registry = registry
         self.bridge_manager = bridge_manager
         self.persona_managers = persona_managers
+        self.file_id_manager = file_id_manager
         self.router: Any = None
-        self._room_to_path: dict[str, str] = {}
 
     def attach(self, router: Any) -> None:
         self.router = router
         router.observe_chat_init(self._on_chat_init)
 
-    def _resolve_chat_path(self, room_id: str, ychat: Any) -> Optional[str]:
-        """Best-effort resolution of room_id -> chat path.
+    def resolve(self, chat_path: str) -> tuple[Optional[str], Optional[Any]]:
+        """Resolve a frontend-supplied chat path to (room_id, ychat).
 
-        The persona-manager for the room owns a `fileid_manager`; we use it to
-        translate the file-id segment of the room_id to a workspace-relative
-        path. Fall back to the room_id itself if anything goes wrong.
+        Mirrors the resolution used in `jupyter-ai-acp-client`'s routes:
+        chat_path -> file_id (via file_id_manager) -> room_id `text:chat:<id>`
+        -> persona_manager (which owns the YChat).
         """
+        if self.file_id_manager is None:
+            return None, None
+        try:
+            file_id = self.file_id_manager.get_id(chat_path)
+        except Exception:
+            return None, None
+        if not file_id:
+            return None, None
+        room_id = f"text:chat:{file_id}"
         pm = self.persona_managers.get(room_id)
-        if pm is not None and hasattr(pm, "fileid_manager"):
-            try:
-                file_id = room_id.split(":")[2]
-                path = pm.fileid_manager.get_path(file_id)
-                if path:
-                    return path
-            except Exception:
-                pass
-        # Fall back to whatever YChat exposes as a path/name attribute.
-        for attr in ("path", "name"):
-            value = getattr(ychat, attr, None)
-            if isinstance(value, str) and value:
-                return value
-        return None
+        if pm is None:
+            return None, None
+        return room_id, getattr(pm, "ychat", None)
 
     def _on_chat_init(self, room_id: str, ychat: Any) -> None:
+        """Restore a previously-bound harness on chat reopen, and install
+        the per-chat msg observer."""
         bridge = self.bridge_manager.get_or_create(room_id)
         bridge.ychat = ychat
 
-        # Register the same bridge under the chat path too, so REST handlers
-        # (which receive the chat path from the frontend) hit the same
-        # ChatBridge instance with `ychat` already populated.
-        chat_path = self._resolve_chat_path(room_id, ychat)
-        if chat_path and chat_path != room_id:
-            self.bridge_manager._bridges[chat_path] = bridge  # noqa: SLF001
-            self._room_to_path[room_id] = chat_path
-
-        # Restore binding from metadata if present.
         meta = ychat.get_metadata().get("acp_bridge")
         if meta and "harness_id" in meta:
             try:
@@ -94,8 +82,6 @@ class BridgeRouterIntegration:
             bridge = self.bridge_manager.lookup(rid)
             if bridge is None or not bridge.is_bound:
                 return
-            # Skip if the message @-mentions a non-harness persona; persona-manager
-            # will handle it.
             mentions = getattr(message, "mentions", None) or []
             pm = self.persona_managers.get(rid)
             if pm is not None and any(m in pm.personas for m in mentions):
@@ -103,23 +89,20 @@ class BridgeRouterIntegration:
             asyncio.create_task(bridge.dispatch_message(message))
         return handler
 
-    def bind_chat(self, chat_id: str, harness_id: str) -> Any:
-        """Bind a chat to a harness and suppress persona-manager auto-reply.
-
-        `chat_id` may be either a router room_id or a chat path; both are
-        registered as keys in the bridge_manager by `_on_chat_init`.
-        """
+    def bind_chat(self, chat_path: str, harness_id: str) -> Any:
+        """Bind a chat (looked up by frontend chat path) to a harness."""
         adapter = self.registry.get(harness_id)
-        bridge = self.bridge_manager.get_or_create(chat_id)
-        bridge.bind(adapter)
-        # Find the room_id for this chat to suppress the right persona-manager.
-        room_id = chat_id
-        if chat_id not in self.persona_managers:
-            for rid, path in self._room_to_path.items():
-                if path == chat_id:
-                    room_id = rid
-                    break
+        room_id, ychat = self.resolve(chat_path)
+        if room_id is None or ychat is None:
+            raise RuntimeError(
+                f"Chat {chat_path!r} is not initialized. Open it once and retry."
+            )
+        bridge = self.bridge_manager.get_or_create(room_id)
+        bridge.ychat = ychat
         pm = self.persona_managers.get(room_id)
+        # Persona must be parented to its PersonaManager so it can resolve
+        # event_loop, log, fileid_manager, etc. via `self.parent.<attr>`.
+        bridge.bind(adapter, parent=pm)
         if pm is not None:
             pm.default_persona_id = None
         return bridge
