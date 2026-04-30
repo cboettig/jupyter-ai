@@ -13,6 +13,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Optional
 
+from jupyter_ai_persona_manager.persona_manager import (
+    SYSTEM_USERNAME,
+    is_persona,
+)
+
 from .manager import BridgeManager
 from .registry import HarnessNotFoundError, HarnessRegistry
 
@@ -81,6 +86,14 @@ class BridgeRouterIntegration:
         def handler(rid: str, message: Any) -> None:
             bridge = self.bridge_manager.lookup(rid)
             if bridge is None or not bridge.is_bound:
+                return
+            # Mirror PersonaManager.on_chat_message: never dispatch a message
+            # whose sender is a persona or the system. Without this, the
+            # persona's own replies loop back as user prompts, corrupting the
+            # conversation and eventually triggering Anthropic's
+            # "cache_control cannot be set for empty text blocks" 400.
+            sender = getattr(message, "sender", "") or ""
+            if is_persona(sender) or sender == SYSTEM_USERNAME:
                 return
             mentions = getattr(message, "mentions", None) or []
             pm = self.persona_managers.get(rid)
