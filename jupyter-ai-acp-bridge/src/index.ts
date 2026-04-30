@@ -3,14 +3,20 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
-import { IChatCommandRegistry } from '@jupyter/chat';
+import {
+  IChatCommandRegistry,
+  IInputToolbarRegistryFactory,
+  InputToolbarRegistry
+} from '@jupyter/chat';
 
 import { BridgeSlashCommandProvider } from './providers/BridgeSlashCommandProvider';
 import { BridgeMentionProvider } from './providers/BridgeMentionProvider';
+import { HarnessToolbarItem } from './components/HarnessToolbarItem';
 
 export { HarnessPicker } from './components/HarnessPicker';
 export { HarnessBadge } from './components/HarnessBadge';
 export { HarnessHeader } from './components/HarnessHeader';
+export { HarnessToolbarItem } from './components/HarnessToolbarItem';
 export { ModelSelector } from './components/ModelSelector';
 export { ModeSelector } from './components/ModeSelector';
 export { ConfigOptionsSelector } from './components/ConfigOptionsSelector';
@@ -48,4 +54,22 @@ const mentionPlugin: JupyterFrontEndPlugin<void> = {
   }
 };
 
-export default [plugin, slashPlugin, mentionPlugin];
+const toolbarPlugin: JupyterFrontEndPlugin<IInputToolbarRegistryFactory> = {
+  id: '@jupyter-ai/acp-bridge:toolbar',
+  description:
+    'Provides an input toolbar registry that hosts the harness picker/badge.',
+  autoStart: true,
+  provides: IInputToolbarRegistryFactory,
+  activate: (_app: JupyterFrontEnd) => ({
+    create: () => {
+      const registry = InputToolbarRegistry.defaultToolbarRegistry();
+      registry.addItem('harness', {
+        element: HarnessToolbarItem,
+        position: 1
+      });
+      return registry;
+    }
+  })
+};
+
+export default [plugin, slashPlugin, mentionPlugin, toolbarPlugin];
