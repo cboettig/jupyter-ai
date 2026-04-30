@@ -55,13 +55,16 @@ class ChatBridge:
             raise AlreadyBoundError(
                 f"chat {self.chat_id} already bound to {self._adapter.id}"
             )
-        self._adapter = adapter
-        self._persona = None
+        # Instantiate the persona BEFORE flipping state, so a failure leaves
+        # the bridge in a clean draft state that can be retried.
+        persona: Optional[Any] = None
         if adapter.persona_class is not None:
-            self._persona = adapter.persona_class(
+            persona = adapter.persona_class(
                 parent=parent,
                 ychat=self.ychat,
             )
+        self._adapter = adapter
+        self._persona = persona
         if self.ychat is not None:
             self.ychat.set_metadata(METADATA_KEY, {"harness_id": adapter.id})
 
