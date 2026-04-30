@@ -4,3 +4,4 @@ tsconfig.tsbuildinfo
 *.egg-info/
 .yarn/
 .pnp.*
+jupyter_ai_acp_bridge/labextension/

@@ -33,17 +33,32 @@ jupyter_ai_acp_bridge = "jupyter_ai_acp_bridge.extension:AcpBridgeExtension"
 [tool.hatch.build.targets.wheel]
 packages = ["jupyter_ai_acp_bridge"]
 
+[tool.hatch.build.targets.sdist]
+artifacts = ["jupyter_ai_acp_bridge/labextension"]
+
 [tool.hatch.build.targets.wheel.shared-data]
+"jupyter_ai_acp_bridge/labextension" = "share/jupyter/labextensions/@jupyter-ai/acp-bridge"
 "jupyter-config/jupyter_server_config.d" = "etc/jupyter/jupyter_server_config.d"
 "install.json" = "share/jupyter/labextensions/@jupyter-ai/acp-bridge/install.json"
 
 [tool.hatch.build.hooks.jupyter-builder]
 dependencies = ["hatch-jupyter-builder>=0.5"]
 build-function = "hatch_jupyter_builder.npm_builder"
+ensured-targets = [
+    "jupyter_ai_acp_bridge/labextension/static/style.js",
+    "jupyter_ai_acp_bridge/labextension/package.json",
+]
+skip-if-exists = ["jupyter_ai_acp_bridge/labextension/static/style.js"]
 
 [tool.hatch.build.hooks.jupyter-builder.build-kwargs]
 build_cmd = "build:prod"
 npm = ["jlpm"]
+
+[tool.hatch.build.hooks.jupyter-builder.editable-build-kwargs]
+build_cmd = "install:extension"
+npm = ["jlpm"]
+source_dir = "src"
+build_dir = "jupyter_ai_acp_bridge/labextension"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
