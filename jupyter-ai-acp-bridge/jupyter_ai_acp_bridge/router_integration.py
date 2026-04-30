@@ -73,8 +73,11 @@ class BridgeRouterIntegration:
             try:
                 adapter = self.registry.get(meta["harness_id"])
                 if bridge.is_draft:
-                    bridge.bind(adapter)
                     pm = self.persona_managers.get(room_id)
+                    # Persona must be parented to its PersonaManager so it
+                    # can resolve event_loop, log, fileid_manager via
+                    # `self.parent.<attr>`. Mirrors `bind_chat()` below.
+                    bridge.bind(adapter, parent=pm)
                     if pm is not None:
                         pm.default_persona_id = None
             except HarnessNotFoundError:
