@@ -71,6 +71,15 @@ class _FakePersonaManager:
     def __init__(self):
         self.default_persona_id = "jupyternaut-id"
         self.personas = {"jupyternaut-id": object()}
+        self.ychat = _FakeYChat()
+
+
+class _FileIdShim:
+    """Returns the supplied chat_path as the file_id, so room_id ends up
+    `text:chat:<chat_path>`."""
+
+    def get_id(self, chat_path):
+        return chat_path
 
 
 def test_bind_chat_suppresses_default_persona():
@@ -85,10 +94,11 @@ def test_bind_chat_suppresses_default_persona():
     integration = BridgeRouterIntegration(
         registry=registry,
         bridge_manager=bm,
-        persona_managers={"chat-1": pm},
+        persona_managers={"text:chat:chat-1": pm},
+        file_id_manager=_FileIdShim(),
     )
     integration.bind_chat("chat-1", "claude-code")
-    bridge = bm.lookup("chat-1")
+    bridge = bm.lookup("text:chat:chat-1")
     assert bridge is not None
     assert bridge.is_bound
     assert pm.default_persona_id is None

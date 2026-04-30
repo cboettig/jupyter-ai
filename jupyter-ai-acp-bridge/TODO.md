@@ -27,11 +27,7 @@ Live status of the PoC. Each item is a discrete deliverable; none block
 
 ## P0 — fix the broken state before claiming done
 
-- [ ] **Fix 3 broken unit tests** (broken by the `integration`-kwarg → settings rewire).
-  - `tests/test_handlers.py::BindHandlerTest::test_bind_creates_binding`
-  - `tests/test_handlers.py::BindHandlerTest::test_double_bind_returns_409`
-  - `tests/test_handlers.py::BindHandlerIntegrationTest::test_bind_uses_integration_when_provided`
-  - Approach: tests should construct a fake integration and inject it via app settings (`settings["jupyter-ai"]["acp-bridge-integration"] = fake_integration`) instead of via the constructor kwarg. The `BindHandlerTest::*` tests need a fake integration with a `bind_chat()` method that calls through to `bridge.bind()` directly (since they don't have a real persona-manager / file-id-manager). Replace the existing `BindHandlerTest::test_bind_unknown_harness_returns_404` similarly.
+- [x] **Fix unit tests broken by the `integration`-kwarg → settings rewire.** Resolved 2026-04-30: actual count was 10 (not 3 — the TODO undercounted). All `_BridgeBaseHandler` subclasses route bridge lookup through `self.integration.resolve(chat_path)`, so every test class that hits one of those endpoints needs a fake integration installed in `app.settings["jupyter-ai"]["acp-bridge-integration"]`. Added a module-level `_IdentityIntegration` helper that maps `chat_path -> chat_path` for tests that pre-bind bridges by chat_id. `BindHandlerTest`/`BindHandlerIntegrationTest` use a custom fake whose `bind_chat()` calls through to `bridge.bind()` directly. Also fixed `test_bind_chat_suppresses_default_persona` in `test_router_integration.py`, which called `bind_chat` directly without a `file_id_manager`. 62/62 tests pass.
 
 ## P1 — UX redesign (Carl explicitly flagged this as terrible)
 

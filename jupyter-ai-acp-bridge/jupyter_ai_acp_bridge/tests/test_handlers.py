@@ -19,6 +19,18 @@ from jupyter_ai_acp_bridge.handlers import (
 from jupyter_ai_acp_bridge.tests.test_bridge import _AsyncFakePersona
 
 
+class _IdentityIntegration:
+    """Test stand-in for `BridgeRouterIntegration` that uses the supplied
+    chat_id directly as the bridge key, bypassing real path resolution."""
+
+    def resolve(self, chat_path):
+        return chat_path, None
+
+
+def _install_integration(app, integration):
+    app.settings["jupyter-ai"] = {"acp-bridge-integration": integration}
+
+
 class HarnessesHandlerTest(AsyncHTTPTestCase):
     def get_app(self) -> Application:
         registry = HarnessRegistry()
@@ -51,11 +63,22 @@ class BindHandlerTest(AsyncHTTPTestCase):
             executable_factory=lambda: ["x"],
         ))
         self.bridge_manager = BridgeManager()
-        return Application(
+
+        # The handler delegates path resolution + bind to an integration it
+        # reads from app settings. Tests bypass real path resolution by using
+        # the supplied chat_id directly as the bridge key.
+        class _FakeIntegration:
+            def bind_chat(_self, chat_id, harness_id):
+                bridge = self.bridge_manager.get_or_create(chat_id)
+                bridge.bind(registry.get(harness_id))
+
+        app = Application(
             [(r"/chats/([^/]+)/bind", BindHandler, dict(
                 registry=registry, bridge_manager=self.bridge_manager,
             ))]
         )
+        app.settings["jupyter-ai"] = {"acp-bridge-integration": _FakeIntegration()}
+        return app
 
     def test_bind_creates_binding(self):
         resp = self.fetch(
@@ -118,7 +141,7 @@ class CapabilityHandlerTests(AsyncHTTPTestCase):
         bridge = self.bridge_manager.get_or_create("chat-1")
         bridge.bind(adapter, parent=object())
         self.bridge = bridge
-        return Application([
+        app = Application([
             (r"/chats/([^/]+)/model", ModelHandler, dict(
                 registry=registry, bridge_manager=self.bridge_manager)),
             (r"/chats/([^/]+)/mode", ModeHandler, dict(
@@ -128,6 +151,8 @@ class CapabilityHandlerTests(AsyncHTTPTestCase):
             (r"/chats/([^/]+)/available-commands", AvailableCommandsHandler, dict(
                 registry=registry, bridge_manager=self.bridge_manager)),
         ])
+        _install_integration(app, _IdentityIntegration())
+        return app
 
     def test_set_model(self):
         resp = self.fetch(
@@ -221,7 +246,7 @@ class PersonalessBindTests(AsyncHTTPTestCase):
         # Pre-bind so the test endpoints can run
         bridge = self.bridge_manager.get_or_create("chat-1")
         bridge.bind(registry.get("bare"))
-        return Application([
+        app = Application([
             (r"/chats/([^/]+)/model", ModelHandler, dict(
                 registry=registry, bridge_manager=self.bridge_manager)),
             (r"/chats/([^/]+)/mode", ModeHandler, dict(
@@ -229,6 +254,8 @@ class PersonalessBindTests(AsyncHTTPTestCase):
             (r"/chats/([^/]+)/config-option", ConfigOptionHandler, dict(
                 registry=registry, bridge_manager=self.bridge_manager)),
         ])
+        _install_integration(app, _IdentityIntegration())
+        return app
 
     def test_set_model_on_bare_bridge_returns_409(self):
         resp = self.fetch(
@@ -288,13 +315,14 @@ class BindHandlerIntegrationTest(AsyncHTTPTestCase):
                 bridge = self.bridge_manager.get_or_create(chat_id)
                 bridge.bind(registry.get(harness_id))
 
-        return Application([
+        app = Application([
             (r"/chats/([^/]+)/bind", BindHandler, dict(
                 registry=registry,
                 bridge_manager=self.bridge_manager,
-                integration=_FakeIntegration(),
             )),
         ])
+        app.settings["jupyter-ai"] = {"acp-bridge-integration": _FakeIntegration()}
+        return app
 
     def test_bind_uses_integration_when_provided(self):
         resp = self.fetch(
