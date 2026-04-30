@@ -70,6 +70,17 @@
   font-style: italic;
 }
 
+.jp-acp-bridge-unbound-hint {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  color: var(--jp-ui-font-color2);
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  font-style: italic;
+}
+
 /* Bound-state badge */
 .jp-acp-bridge-badge {
   display: inline-flex;

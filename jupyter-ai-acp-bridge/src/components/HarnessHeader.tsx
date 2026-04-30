@@ -3,13 +3,19 @@ import { useEffect, useState } from 'react';
 
 import { HarnessInfo, ChatBridgeState } from '../types';
 import { getState, listHarnesses } from '../api';
-import { HarnessPicker } from './HarnessPicker';
 import { HarnessBadge } from './HarnessBadge';
 
 export interface HarnessHeaderProps {
   chatId: string;
 }
 
+/**
+ * In-chat harness display. Read-only — selecting a harness happens at
+ * chat-creation time via the launcher cards (see `src/launcher.ts`), not
+ * here. Bound chats show the agent badge; unbound chats (legacy or
+ * created via the standard `Chat` launcher card) show a hint pointing
+ * to the launcher.
+ */
 export const HarnessHeader: React.FC<HarnessHeaderProps> = ({ chatId }) => {
   const [state, setState] = useState<ChatBridgeState | null>(null);
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([]);
@@ -24,29 +30,13 @@ export const HarnessHeader: React.FC<HarnessHeaderProps> = ({ chatId }) => {
   }, [chatId]);
 
   if (state === null) {
-    // Render a placeholder toggle eagerly so the chat-input toolbar always
-    // shows something — otherwise the toolbar slot looks empty until the
-    // GET /state fetch resolves, and re-renders triggered by typing make
-    // the picker appear to be `@`-gated.
-    return (
-      <button
-        type="button"
-        className="jp-acp-bridge-picker-toggle"
-        disabled
-        aria-busy="true"
-      >
-        Pick agent ▾
-      </button>
-    );
+    return null;
   }
   if (state.harness_id === null) {
     return (
-      <HarnessPicker
-        chatId={chatId}
-        onBound={(id: string) =>
-          setState({ ...state, harness_id: id })
-        }
-      />
+      <span className="jp-acp-bridge-unbound-hint" title="No agent bound">
+        No agent — start a new chat from the Launcher.
+      </span>
     );
   }
   const matched = harnesses.find(h => h.id === state.harness_id);

@@ -8,10 +8,12 @@ import {
   IInputToolbarRegistryFactory,
   InputToolbarRegistry
 } from '@jupyter/chat';
+import { ILauncher } from '@jupyterlab/launcher';
 
 import { BridgeSlashCommandProvider } from './providers/BridgeSlashCommandProvider';
 import { BridgeMentionProvider } from './providers/BridgeMentionProvider';
 import { HarnessToolbarItem } from './components/HarnessToolbarItem';
+import { registerLauncherCards } from './launcher';
 
 export { HarnessPicker } from './components/HarnessPicker';
 export { HarnessBadge } from './components/HarnessBadge';
@@ -72,4 +74,24 @@ const toolbarPlugin: JupyterFrontEndPlugin<IInputToolbarRegistryFactory> = {
   })
 };
 
-export default [plugin, slashPlugin, mentionPlugin, toolbarPlugin];
+const launcherPlugin: JupyterFrontEndPlugin<void> = {
+  id: '@jupyter-ai/acp-bridge:launcher',
+  description:
+    'Adds one launcher card per ACP harness; clicking creates a new ' +
+    'chat already bound to that harness.',
+  autoStart: true,
+  requires: [ILauncher],
+  activate: (app: JupyterFrontEnd, launcher: ILauncher) => {
+    registerLauncherCards(app, launcher).catch(err =>
+      console.error('Failed to register ACP harness launcher cards:', err)
+    );
+  }
+};
+
+export default [
+  plugin,
+  slashPlugin,
+  mentionPlugin,
+  toolbarPlugin,
+  launcherPlugin
+];
