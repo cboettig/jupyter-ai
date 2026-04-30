@@ -21,6 +21,12 @@ from jupyter_ai_persona_manager.persona_manager import (
 from .manager import BridgeManager
 from .registry import HarnessNotFoundError, HarnessRegistry
 
+# Module prefix for the upstream `jupyter-ai-acp-client` @-mention personas.
+# When the bridge is installed, those personas are superseded by bridge-bound
+# chats (see `_suppress_acp_client_personas`); both paths spawn the same
+# claude-agent-acp subprocess, so keeping both registered is just confusing.
+_ACP_CLIENT_PERSONAS_MODULE = "jupyter_ai_acp_client.acp_personas"
+
 
 class BridgeRouterIntegration:
     def __init__(
@@ -62,11 +68,30 @@ class BridgeRouterIntegration:
             return None, None
         return room_id, getattr(pm, "ychat", None)
 
+    def _suppress_acp_client_personas(self, pm: Any) -> None:
+        """Remove auto-discovered `jupyter-ai-acp-client` personas from a
+        PersonaManager so they don't appear in @-mention completion. The
+        bridge supersedes them; same subprocess, single canonical entry
+        path (launcher cards). Idempotent — safe to call repeatedly."""
+        if pm is None or not hasattr(pm, "personas"):
+            return
+        to_remove = [
+            pid
+            for pid, persona in list(pm.personas.items())
+            if type(persona).__module__.startswith(_ACP_CLIENT_PERSONAS_MODULE)
+        ]
+        for pid in to_remove:
+            pm.personas.pop(pid, None)
+
     def _on_chat_init(self, room_id: str, ychat: Any) -> None:
         """Restore a previously-bound harness on chat reopen, and install
         the per-chat msg observer."""
         bridge = self.bridge_manager.get_or_create(room_id)
         bridge.ychat = ychat
+
+        # Hide upstream @-mention ACP personas regardless of binding state —
+        # the bridge owns the ACP entry path now.
+        self._suppress_acp_client_personas(self.persona_managers.get(room_id))
 
         meta = ychat.get_metadata().get("acp_bridge")
         if meta and "harness_id" in meta:
@@ -121,4 +146,7 @@ class BridgeRouterIntegration:
         bridge.bind(adapter, parent=pm)
         if pm is not None:
             pm.default_persona_id = None
+        # Idempotent — _on_chat_init usually got there first, but a chat
+        # bound before its init observer fires would still benefit.
+        self._suppress_acp_client_personas(pm)
         return bridge
