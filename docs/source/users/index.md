@@ -261,4 +261,5 @@ configured MCP servers will be available to every ACP agent in your session.
 troubleshooting
 magic_commands/index
 jupyternaut/index
+acp-bridge
 ```
