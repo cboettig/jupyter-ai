@@ -4,6 +4,7 @@
   "description": "Per-thread ACP harness binding for Jupyter AI",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "style": "style/index.css",
   "files": [
     "lib/**/*.{d.ts,js,js.map,json}",
     "style/**/*.{css}"

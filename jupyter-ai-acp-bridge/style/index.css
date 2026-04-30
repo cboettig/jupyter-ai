@@ -1,0 +1,86 @@
+/* Harness picker — Zed-style single-button dropdown shown in chat input toolbar. */
+
+.jp-acp-bridge-picker {
+  position: relative;
+  display: inline-block;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+}
+
+.jp-acp-bridge-picker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  height: 24px;
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.jp-acp-bridge-picker-toggle:hover:not(:disabled) {
+  background: var(--jp-layout-color2);
+}
+
+.jp-acp-bridge-picker-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.jp-acp-bridge-picker-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 1000;
+  min-width: 160px;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 3px;
+  box-shadow: var(--jp-elevation-z4);
+}
+
+.jp-acp-bridge-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.jp-acp-bridge-picker-item:hover,
+.jp-acp-bridge-picker-item:focus {
+  background: var(--jp-layout-color2);
+  outline: none;
+}
+
+.jp-acp-bridge-picker-item img {
+  flex-shrink: 0;
+}
+
+.jp-acp-bridge-picker-empty {
+  padding: 4px 10px;
+  color: var(--jp-ui-font-color2);
+  font-style: italic;
+}
+
+/* Bound-state badge */
+.jp-acp-bridge-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  height: 24px;
+  background: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color1);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 3px;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+}

@@ -31,12 +31,8 @@ Live status of the PoC. Each item is a discrete deliverable; none block
 
 ## P1 — UX redesign (Carl explicitly flagged this as terrible)
 
-- [ ] **Replace inline-buttons-in-toolbar layout with a single dropdown button**, Zed-style.
-  - Current `HarnessHeader` renders one `<button>` per harness in draft state, plus a badge in bound state.
-  - Target: single button labeled "Pick agent ▾" (or current harness name + ▾ in bound state) that opens a popover/menu listing harnesses. Click a row → bind → close popover.
-  - Lumino's `Menu` from `@lumino/widgets` is the conventional JupyterLab popover primitive; or pure React state (`useState` for open/closed) wrapping `@jupyterlab/ui-components`'s button styles.
-  - Currently lives in `src/components/HarnessHeader.tsx` and `src/components/HarnessToolbarItem.tsx`. The toolbar item wraps the header.
-- [ ] **Investigate why the picker only renders when the user types `@`.** Carl observed that the toolbar item disappears until the input is interacted with. Likely a chat-input-toolbar show/hide behavior in `@jupyter/chat`. Inspect `node_modules/@jupyter/chat/lib/components/input/` to find the gating logic.
+- [x] **Replace inline-buttons-in-toolbar layout with a single dropdown button**, Zed-style. Done 2026-04-30. `HarnessPicker` is now a single `Pick agent ▾` button that opens a popover menu of harnesses; pure React (no Lumino) with `useRef` + document `mousedown` for click-outside dismiss. CSS lives in `style/index.css` (referenced from `package.json`'s `style` field), uses JupyterLab `--jp-*` theme variables. Bound state still shows the read-only `HarnessBadge` (no chevron — rebinding isn't supported by the API; revisit if/when it is).
+- [x] **Investigate why the picker only renders when the user types `@`.** Resolved 2026-04-30 — was a render-timing artifact, not toolbar gating. `@jupyter/chat`'s input-toolbar always renders all registered items (`chat-input.js` `INPUT_TOOLBAR_CLASS` `Box` is unconditional); but `HarnessHeader` returned `null` while the initial `GET /state` fetch was in flight. Typing `@` triggered a chat-input re-render that coincided with the fetch resolving, making `@` look causal. Fix: render a disabled `Pick agent ▾` placeholder button while `state === null`, so the slot is never empty.
 - [ ] **Resolve the toolbar-factory conflict with `acp-client`.** Both packages provide `IInputToolbarRegistryFactory`; only one wins in JupyterLab DI. Either compose (provide a wrapping factory that reads from a known token) or document explicitly which-wins-when. This is also a small upstream paper-cut worth noting in the issue thread.
 
 ## P2 — make the capability dropdowns actually functional

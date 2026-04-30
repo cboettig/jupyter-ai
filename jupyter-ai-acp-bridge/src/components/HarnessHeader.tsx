@@ -24,7 +24,20 @@ export const HarnessHeader: React.FC<HarnessHeaderProps> = ({ chatId }) => {
   }, [chatId]);
 
   if (state === null) {
-    return null;
+    // Render a placeholder toggle eagerly so the chat-input toolbar always
+    // shows something — otherwise the toolbar slot looks empty until the
+    // GET /state fetch resolves, and re-renders triggered by typing make
+    // the picker appear to be `@`-gated.
+    return (
+      <button
+        type="button"
+        className="jp-acp-bridge-picker-toggle"
+        disabled
+        aria-busy="true"
+      >
+        Pick agent ▾
+      </button>
+    );
   }
   if (state.harness_id === null) {
     return (
