@@ -12,14 +12,28 @@ existing personas (jupyternaut, custom user personas, the legacy
 
 ## Install
 
+The bridge is **not on PyPI** — it lives on the `acp-bridge-impl` branch of
+the [cboettig/jupyter-ai](https://github.com/cboettig/jupyter-ai) fork as a
+PoC. Install directly from the branch:
+
 ```
-pip install jupyter-ai[acp-bridge]
+pip install \
+  "git+https://github.com/cboettig/jupyter-ai.git@acp-bridge-impl#subdirectory=jupyter-ai-acp-bridge"
 ```
 
-The bridge depends on `jupyter-ai-acp-client`, which provides the underlying
-`BaseAcpPersona` runtime that subprocess and ACP-session management is built
-on. Currently registered harnesses are Claude Code (requires
-`claude-agent-acp` on PATH) and OpenCode (requires `opencode` on PATH).
+This pulls in `jupyter-ai-acp-client`, `jupyter-ai-router`,
+`jupyter-ai-persona-manager`, and `jupyterlab-chat` from PyPI as transitive
+dependencies, and builds the JupyterLab extension bundle at install time
+(Node.js needs to be available).
+
+Then install at least one ACP harness binary on PATH:
+
+- Claude Code requires `claude-agent-acp` (see Claude Code docs).
+- OpenCode requires `opencode` (see [opencode.ai](https://opencode.ai)).
+
+See the package's
+[README](https://github.com/cboettig/jupyter-ai/blob/acp-bridge-impl/jupyter-ai-acp-bridge/README.md)
+for the full install/verify/run flow.
 
 ## Use
 
