@@ -22,4 +22,5 @@ In v3, `jupyter-ai` is no longer a monorepo. Instead it comprises components tha
 :depth: 3
 
 entry_points_api/index.md
+acp-bridge-rationale.md
 ```
