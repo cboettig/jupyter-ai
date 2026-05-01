@@ -20,6 +20,7 @@ from typing import Any
 
 _MODEL_ATTR = "_acp_bridge_selected_model_id"
 _MODE_ATTR = "_acp_bridge_selected_mode_id"
+_LOGGED_RESPONSE_ATTR = "_acp_bridge_logged_response"
 
 
 class AcpBridgeCapabilityMixin:
@@ -28,6 +29,42 @@ class AcpBridgeCapabilityMixin:
             response = await self.get_session_response()  # type: ignore[attr-defined]
         except Exception:
             response = None
+
+        # Temporary diagnostic (P2 Step 1, 2026-05-01): log the raw shape of
+        # NewSessionResponse the FIRST time a chat asks for state, so we can
+        # see whether claude-agent-acp / opencode actually populate
+        # `models` / `modes` / `config_options`. Remove once UI is wired.
+        if response is not None and not getattr(
+            self, _LOGGED_RESPONSE_ATTR, False
+        ):
+            log = getattr(self, "log", None)
+            if log is not None:
+                try:
+                    models = getattr(response, "models", None)
+                    modes = getattr(response, "modes", None)
+                    cfg = getattr(response, "config_options", None)
+                    log.info(
+                        "[acp-bridge diagnostic] persona=%s "
+                        "session_response.models=%r "
+                        "session_response.modes=%r "
+                        "session_response.config_options=%r",
+                        type(self).__name__,
+                        models.model_dump(by_alias=True)
+                        if models is not None
+                        else None,
+                        modes.model_dump(by_alias=True)
+                        if modes is not None
+                        else None,
+                        [c.model_dump(by_alias=True) for c in cfg]
+                        if cfg
+                        else cfg,
+                    )
+                except Exception as exc:
+                    log.warning(
+                        "[acp-bridge diagnostic] failed to dump response: %r",
+                        exc,
+                    )
+            setattr(self, _LOGGED_RESPONSE_ATTR, True)
 
         available_models: list[dict] = []
         selected_model_id = getattr(self, _MODEL_ATTR, None)

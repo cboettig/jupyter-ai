@@ -35,27 +35,41 @@ Live status of the PoC. Each item is a discrete deliverable; none block
 - [x] **Persona-loop bug: agent stops replying after a couple of turns.** Resolved 2026-04-30. `_make_msg_handler` was dispatching every chat message in the room — including the bound persona's own replies — back to the persona as if they were user prompts. After ~3 turns the conversation accumulated empty/duplicate content blocks, and `claude-agent-acp` would forward a malformed prompt to Anthropic, getting back `messages.N.content.0.text: cache_control cannot be set for empty text blocks`. Fix: mirror `PersonaManager.on_chat_message` and skip messages whose sender is a persona (`is_persona(sender)`) or `SYSTEM_USERNAME`. Harness-agnostic, also unblocks OpenCode.
 - [x] **Restored bindings (`_on_chat_init`) were missing `parent=PersonaManager`.** Resolved 2026-04-30. Reopening a chat with `acp_bridge` metadata called `bridge.bind(adapter)` without a parent, so the persona's `event_loop`/`log`/`fileid_manager` couldn't resolve via traitlets. Mirrors `bind_chat()` now. The launcher flow exercises this on every server restart.
 - [x] **Investigate why the picker only renders when the user types `@`.** Resolved 2026-04-30 — was a render-timing artifact, not toolbar gating. `@jupyter/chat`'s input-toolbar always renders all registered items (`chat-input.js` `INPUT_TOOLBAR_CLASS` `Box` is unconditional); but `HarnessHeader` returned `null` while the initial `GET /state` fetch was in flight. Typing `@` triggered a chat-input re-render that coincided with the fetch resolving, making `@` look causal. (Moot now that the in-chat picker is gone, but the eager-render fix is still in place for the badge/hint.)
-- [ ] **Resolve the toolbar-factory conflict with `acp-client`.** Both packages provide `IInputToolbarRegistryFactory`; only one wins in JupyterLab DI. Now lower priority — the bridge's toolbar item is read-only and small, but the conflict still drops one of the two factories' items at runtime. Either compose (provide a wrapping factory that reads from a known token) or document explicitly which-wins-when. Worth noting in the issue thread either way.
+- (Toolbar-factory conflict with `acp-client` moved to P3; becomes load-bearing only once we add multiple toolbar items in Step 2.)
 
-## P2 — make the capability dropdowns actually functional
+## P2 — Match Zed's capability-selector UX (model / mode / config-options)
 
-- [ ] **Implement real ACP RPC for set-model / set-mode / set-config-option.**
-  - `JaiAcpClient` does NOT expose convenience helpers. Have to construct ACP requests directly using types from the `acp` Python package.
-  - Stubs are in `jupyter_ai_acp_bridge/harnesses/claude_code.py` and `opencode.py`, methods `set_session_model`, `set_session_mode`, `set_session_config_option`. Each has a TODO comment naming the request type.
-  - Pattern likely:
-    ```python
-    from acp import SetSessionModelRequest
-    client = await self.get_client()
-    session_id = await self.get_session_id()
-    await client.get_connection().send_request(
-        SetSessionModelRequest(session_id=session_id, model_id=model_id)
-    )
-    ```
-    Verify against the running ACP protocol — types and method may need adjustment.
-- [ ] **Read live capability state from the ACP session.**
-  - `get_session_state()` currently returns empty arrays for `available_models`, `session_modes`, `config_options`.
-  - Pull from `await self.get_session_response()` (returns `NewSessionResponse | LoadSessionResponse` from `BaseAcpPersona._client_session_future`). Inspect the response object's attributes; ACP defines `SessionModelState`, `SessionModeState`, `ConfigOptionUpdate` etc. as schema types.
-  - Once populated, the `ModelSelector`/`ModeSelector`/`ConfigOptionsSelector` React components will start rendering — they hide when the array is empty.
+Reference: Zed's `crates/agent_servers/src/acp.rs` (the generic ACP integration — no Claude/OpenCode special-cases) and `crates/agent_ui/src/conversation_view/thread_view.rs:3270` (input-toolbar bottom-row layout).
+
+Confirmed from the ACP schema:
+- **Models** live in `NewSessionResponse.models: SessionModelState`. Set once at session creation; **no `CurrentModelUpdate` event exists** (verified — schema only has `SessionInfoUpdate` / `UsageUpdate` / `CurrentModeUpdate` / `AvailableCommandsUpdate` / `ToolCallUpdate` / `ConfigOptionUpdate`). Changed via `connection.set_session_model(model_id, session_id)`.
+- **Modes** live in `NewSessionResponse.modes: SessionModeState`. Updated dynamically via `CurrentModeUpdate`. Changed via `set_session_mode`.
+- **Config options** live in `NewSessionResponse.config_options: list[Boolean | Select]`. Updated via `ConfigOptionUpdate`. Changed via `set_config_option`.
+- **Mutually exclusive in the UI**: when `config_options` is present, the model+mode selectors are hidden (mirroring Zed's `config_state()` which returns either modes/models or config_options, never both).
+- **Effort levels are NOT in ACP** — Zed has them as a hardcoded property of certain Claude model IDs (`model.supported_effort_levels()` in the `language_model` crate). Out of scope for this PoC.
+
+- [x] **Backend: real ACP RPC for set-model / set-mode / set-config-option.** Done 2026-04-30 in `_capabilities.AcpBridgeCapabilityMixin`. Goes through `connection.set_session_model(model_id, session_id)` etc. — the ACP client connection already exposes these directly, no raw RPC plumbing needed. Selected model/mode tracked on the persona instance to survive `set_session_*` round-trips (no SessionUpdate event for model changes).
+
+- [ ] **Step 1 — Diagnostic: confirm `claude-agent-acp` actually populates `response.models`.** Frontend selector still empty as of 2026-05-01. Either claude-agent-acp doesn't fill `models` for the npm version installed, or our reading code has a bug. Add temp logging in `get_session_state` that dumps `response.models` / `response.modes` / `response.config_options` once per persona, restart, open a fresh chat, read the log. Branch: populated → frontend bug. None → version-stuck or different protocol path. (Same for OpenCode.)
+
+- [ ] **Step 2 — Match Zed's input-toolbar layout.** Currently the badge + selector are jammed inline in one toolbar item. Zed registers them as **separate toolbar items** in a horizontal row above the send button:
+  - `HarnessBadge` (read-only pill, position 1)
+  - `ModelSelectorToolbarItem` (position 2) — hides when `available_models` empty
+  - `ModeSelectorToolbarItem` (position 3) — hides when `session_modes` empty
+  - `ConfigOptionsToolbarItem` (position 4) — *replaces* mode+model when `config_options` present
+  Existing `ModelSelector` / `ModeSelector` / `ConfigOptionsSelector` React components already self-hide on empty — just need toolbar wrappers + `index.ts` registration.
+
+- [ ] **Step 3 — Reactive updates from `CurrentModeUpdate` / `ConfigOptionUpdate` SessionUpdate events.** The agent can change mode/config internally (e.g., a slash command toggles plan/build); we need the UI to reflect that without a manual reload. Bridge-side: subscribe to session updates in `BaseAcpPersona`'s `session_update` handler, mutate the tracked state. Frontend-side: simplest is poll `/state` every ~5s when chat focused; upgrade to push (websocket / SSE) only if perceptibly laggy.
+
+## P3 — Deferred until after the model/mode/config selectors land
+
+- [ ] **Step 4 — Per-chat agent identity selector at the top of the chat panel.** Zed shows `Claude Agent ▾` at the top of the input area; clicking opens an agent picker + the ACP Registry (Zed's marketplace of installable agents). Deferred per Carl 2026-05-01: the augmented `+ New chat` dialog already covers picking an agent at chat creation, and the per-chat picker mostly matters once we have a registry of installable agents to surface (which is itself out of scope for the PoC). Revisit if/when ACP Registry questions land.
+
+- [ ] **Effort selector.** Pure Zed-side concept (model registry mapping certain Claude IDs to effort levels), not in the ACP wire. Skip unless user demand surfaces.
+
+- [ ] **ACP Registry / "Add More Agents" flow.** Zed has a marketplace of installable ACP servers (Agoragentic, Amp, Auggie CLI, etc., per Carl's screenshot 2). Way out of scope for the PoC; needs its own design.
+
+- [ ] **Resolve the toolbar-factory conflict with `acp-client`.** Both packages provide `IInputToolbarRegistryFactory`; only one wins in JupyterLab DI. Becomes more pressing once we add multiple toolbar items in Step 2. Cleanest fix is upstream in `@jupyter/chat` (composable registry).
 
 ## P3 — defer until after the issue-thread discussion
 
