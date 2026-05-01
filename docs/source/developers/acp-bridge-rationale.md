@@ -15,6 +15,12 @@ the design spec at
 > selectors mount, etc.) are now obsolete. Refer to this doc for
 > current architecture; consult the plan only as a historical record.
 
+> **Conceptual companion:**
+> [`personas-as-skills.md`](personas-as-skills.md) — the framing essay
+> on how this work sits inside the original Personas vision in
+> jupyter-ai, and how Personas align with the
+> [Agent Skills](https://agentskills.io/home) open standard.
+
 ## Why this exists, briefly
 
 Per [issue #1558](https://github.com/jupyterlab/jupyter-ai/issues/1558):
