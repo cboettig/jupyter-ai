@@ -67,6 +67,9 @@ calling the harness one.
 
 ## What is a Persona, really?
 
+Our proposal is to have a more robust definition of a persona; instead of a thing you
+can `@`, a persona has a specific scope of responsibility.
+
 Strip away the implementation, and a persona is a **bundle of context
 loaded into a conversation**:
 
