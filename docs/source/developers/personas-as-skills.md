@@ -153,8 +153,7 @@ That's not a knock on `BasePersona`'s design. It predates the
 convergence of the Skills standard and was a sensible choice at its
 time. But its packaging requirements have a real cost:
 
-- Authoring a persona requires Python knowledge and JupyterLab
-  packaging knowledge.
+- Authoring a persona requires Python coding and packaging knowledge.
 - Personas can't be shared across chat surfaces — your jupyter-ai
   persona doesn't work in your terminal, and vice versa.
 - Persona libraries don't pool with the broader community; everyone
