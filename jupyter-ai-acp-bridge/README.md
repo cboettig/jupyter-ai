@@ -12,16 +12,27 @@ agreement on the design.
 
 ## What you'll experience
 
-After installing, every new Jupyter AI chat starts in a "draft" state with a
-harness picker offering whichever ACP harnesses you have on `PATH` (the demo
-ships adapters for Claude Code and OpenCode). Picking a harness binds the
-chat to it for that chat's lifetime — to use a different harness, start a new
-chat. The chat input gets harness-aware slash-command completion (`/help`,
-`/permissions`, etc., populated from whatever the harness advertises) and
-`@<filename>` completion against the workspace.
+The bridge augments the standard "Create a new chat" dialog with an **Agent**
+selector. Pick a harness when you create the chat (Claude Code, OpenCode,
+…) and the chat is bound to that harness for its lifetime — the same model
+Zed uses for its agent panel. To use a different harness, start a new chat.
 
-This is the architectural pattern. A few things are still stubs and noted
-under "Known limitations" below.
+Inside a bound chat the input toolbar shows the harness badge plus, when the
+harness advertises models, a model `<select>` for picking among them
+(Claude Code exposes Default / Sonnet / Haiku). The chat input gets
+harness-aware slash-command completion (`/help`, `/permissions`, etc.,
+populated from whatever the harness advertises) and `@<filename>` completion
+against the workspace.
+
+When the bridge is installed it suppresses the legacy `@`-mention ACP
+personas (`@Claude`, `@OpenCode`, …) from `jupyter-ai-acp-client`, since
+the bridge supersedes them — both paths end up in the same
+`claude-agent-acp` / `opencode` subprocess, so having both surfaces was
+confusing. Other Jupyter AI personas (`jupyternaut`, custom user personas)
+are unaffected.
+
+This is the architectural pattern. A few pieces are still in progress and
+noted under "Known limitations" below.
 
 ## Install
 
@@ -70,8 +81,8 @@ an ACP harness binary on `PATH`. The demo currently registers two:
   [opencode.ai](https://opencode.ai) for installation; works with any
   configured provider.
 
-You can install one or both. If you only install one, the picker will only
-offer that one.
+You can install one or both. If you only install one, the **Agent** dropdown
+in the new-chat dialog will only offer that one.
 
 ## Run
 
@@ -79,45 +90,42 @@ offer that one.
 jupyter lab
 ```
 
-Open a new chat. Click the harness you want from the picker. Send a message.
-That's the demo.
+Click **+ New chat** in the chat sidebar (or **Chat** in the launcher).
+Pick a harness and a name in the dialog. Send a message. That's the demo.
 
 ## Known limitations
 
 This is a PoC, deliberately scoped to demonstrate the architectural pattern.
-Three pieces are documented gaps with concrete follow-ups:
+Concrete in-flight follow-ups, with their TODO links:
 
-1. **Toolbar selectors don't auto-attach to the chat input.** The
-   `ModelSelector`, `ModeSelector`, and `ConfigOptionsSelector` React
-   components are exported from the package and work in isolation, but they
-   don't appear in the chat input toolbar yet because `@jupyter/chat` needs
-   to expose `IInputToolbarRegistry` as a JupyterFrontEnd token before
-   plugins can register toolbar items. **This is itself argument material for
-   the upstream proposal** — the Zed-style design needs that small extension
-   point to land cleanly.
+1. **Mode and config-option toolbar items not yet rendered.** Only the model
+   selector is mounted in the chat input toolbar. The `ModeSelector` and
+   `ConfigOptionsSelector` React components exist and the backend state is
+   populated, but the Zed-style separate-toolbar-items layout (with mode +
+   model hidden when `config_options` is present) is the next deliverable
+   (P2 Step 2 in `TODO.md`).
 
-2. **Model / mode / config-option setters are no-ops.** Issuing the actual
-   `acp.SetSessionModelRequest`, `acp.SetSessionModeRequest`, and
-   `acp.SetSessionConfigOption*Request` calls requires raw ACP RPC plumbing
-   that didn't fit in the PoC budget. The methods exist with TODO comments
-   in `jupyter_ai_acp_bridge/harnesses/claude_code.py` and `opencode.py`.
+2. **No reactive push for `CurrentModeUpdate` / `ConfigOptionUpdate`.** If
+   the agent emits one of these `SessionUpdate` events mid-session (e.g.
+   a slash command toggles plan/build), our cached state lags until the
+   next `/state` request. Cheap fix is poll-on-focus; push is a follow-up
+   (P2 Step 3).
 
-3. **Capability state isn't read from the live session.** Once gap #2 lands,
-   `get_session_state()` can populate `available_models`, `session_modes`,
-   and `config_options` from the harness's `session/new` response, and the
-   selectors will start to populate. Until then, the selectors hide
-   themselves (which is the correct production behavior — no advertised
-   capability, no UI element).
+3. **Toolbar-factory conflict with `jupyter-ai-acp-client`.** Both
+   packages provide `IInputToolbarRegistryFactory`; only one wins in
+   JupyterLab DI. Becomes load-bearing once we add multiple toolbar items
+   in P2 Step 2; cleanest fix is upstream in `@jupyter/chat`.
 
-Once gaps #2 and #3 are closed, a fake-ACP-agent integration test becomes
-meaningful and is the next obvious test to add.
+4. **No effort selector, no per-chat agent-identity selector at the top
+   of the panel, no ACP Registry / "Add More Agents" flow.** All deferred;
+   see `TODO.md` P3.
 
 ## Where the code lives
 
 - **Python backend** (per-chat state machine, REST routes, router/persona-manager
   hooks, harness adapters): [`jupyter_ai_acp_bridge/`](jupyter_ai_acp_bridge/)
-- **TypeScript frontend** (REST client, React components, completion providers):
-  [`src/`](src/)
+- **TypeScript frontend** (REST client, React components, augmented
+  create-chat dialog): [`src/`](src/)
 - **Design spec** (full rationale, alternative-options analysis, decision log):
   [`docs/superpowers/specs/2026-04-28-acp-bridge-design.md`](../docs/superpowers/specs/2026-04-28-acp-bridge-design.md)
 - **Implementation plan** (the bite-sized TDD task list this PoC was built from):
@@ -125,6 +133,7 @@ meaningful and is the next obvious test to add.
 - **Developer rationale** (architectural map, layering against existing contrib
   packages, gap follow-ups):
   [`docs/source/developers/acp-bridge-rationale.md`](../docs/source/developers/acp-bridge-rationale.md)
+- **Live TODO** (what's done / in-flight / deferred): [`TODO.md`](TODO.md)
 
 ## Compatibility
 
@@ -132,7 +141,7 @@ meaningful and is the next obvious test to add.
 - JupyterLab ≥ 4.0
 - Node.js (for the build hook at install time)
 - Tested against `jupyter-ai-acp-client` 0.1.3, `jupyter-ai-router` 0.0.4,
-  `jupyter-ai-persona-manager` 0.0.11.
+  `jupyter-ai-persona-manager` 0.0.11, `jupyterlab-chat` 0.21.x.
 
 ## Status
 

@@ -76,60 +76,82 @@ The design closely mirrors Zed's `crates/acp_thread` and
   Zed; here it's an optional dict-key in `bridge.get_state()`. UI
   hides when the capability is absent in both implementations.
 - Models come straight from ACP `available_models` — never hard-coded
-  per harness. (Today our wrapper's `get_session_state` is a stub,
-  but the contract is in place; see follow-up below.)
+  per harness. `get_session_state()` reads them from the cached
+  `NewSessionResponse.models`, mirroring Zed's `config_state()` in
+  `crates/agent_servers/src/acp.rs`.
 
-## Known gaps and follow-ups
+## Status snapshot (as of 2026-05-01)
 
-These are the items that did NOT land in the PoC. Each is a small
-deliverable on its own and can be tackled independently:
+What works end-to-end:
 
-### G1. Toolbar registration of selectors
+- **Per-chat binding via the augmented "Create a new chat" dialog.** The
+  bridge replaces `jupyterlab-chat:create` with a wrapper that asks for
+  both name and harness in one dialog, then delegates to the original
+  command and binds via the bridge `/bind` REST endpoint with retry. All
+  chat-creation entry points (sidebar `+`, "Chat" launcher card,
+  command-palette "Create a new chat") flow through it.
+- **Read-only badge in the chat input toolbar** for bound chats; an
+  italic hint pointing back at the launcher for unbound chats.
+- **Real ACP RPC for setters.** `set_session_model` / `set_session_mode`
+  / `set_session_config_option` go through the ACP client connection's
+  built-in `set_session_model(model_id, session_id)` etc. — no raw
+  JSON-RPC plumbing needed in the wrappers. Lives in
+  `_capabilities.AcpBridgeCapabilityMixin`.
+- **Live capability state** read from `NewSessionResponse.models` /
+  `.modes` / `.config_options`. Surfaces `available_models`,
+  `session_modes`, `config_options` in `/state`.
+- **Model selector** rendered inline next to the badge for harnesses
+  that advertise a model list (Claude Code: Default / Sonnet / Haiku).
 
-`@jupyter/chat` exports `IInputToolbarRegistry` as a class and
-interface but does not export it as a JupyterFrontEnd token. Without a
-token, plugins can't get a reference to call `addItem(...)`. The bridge
-exports `ModelSelector`, `ModeSelector`, and `ConfigOptionsSelector`
-from its public API; consumers can render them manually, but
-auto-attachment to the chat input toolbar requires a small upstream
-change to `@jupyter/chat`. The clean upstream PR is one of:
+What's still in flight (mapped to TODO.md P2 step numbers):
 
-1. Re-export the existing `InputToolbarRegistry` instance via a new
-   `IInputToolbarRegistry` token.
-2. Construct the registry as a `Token`-provided service so plugins
-   can `requires: [IInputToolbarRegistry]` like they already can for
-   `IChatCommandRegistry`.
+### G1. Zed-style toolbar layout (P2 Step 2)
 
-Until then, the selectors are testable in isolation but not visually
-present in the chat input.
+Currently the badge + `<select>` are jammed inline in one toolbar
+item. Zed renders them as separate items in a horizontal row above
+the send button: badge, then mode selector, then model selector — and
+when `config_options` is present (which claude-agent-acp does, with
+`category: 'model'` / `'mode'` mirroring the dedicated fields), the
+mode + model selectors are *replaced* by config-options renderers.
+The `ModeSelector` and `ConfigOptionsSelector` React components
+already exist; this is the toolbar wrapper + index.ts registration
+work, not new components. Loosely blocked on G3 (factory conflict)
+becoming load-bearing once we have multiple toolbar items.
 
-### G2. Real ACP RPC for set-model / set-mode / set-config-option
+### G2. Reactive `CurrentModeUpdate` / `ConfigOptionUpdate` handling (P2 Step 3)
 
-`JaiAcpClient` does not yet expose convenience methods for sending
-`acp.SetSessionModelRequest`, `acp.SetSessionModeRequest`, and the
-`SetSessionConfigOption*Request` family. The bridge harness wrappers
-have stub setters with TODO comments referencing these types. The
-follow-up is either to add helpers on `JaiAcpClient` (preferred — keeps
-the bridge wrappers small) or to do the RPC plumbing inside the bridge
-wrapper classes (workable but duplicates logic if multiple harnesses
-need it).
+The agent can change mode or config internally (slash command toggles
+plan/build, etc.); we need the UI to reflect that. Bridge-side: hook
+the persona's `session_update` handler. Frontend-side: cheap is poll
+`/state` every 5s when the chat is focused; push (websocket / SSE) is
+a follow-up.
 
-### G3. Reading capability state from the live session
+### G3. Toolbar-factory conflict with `jupyter-ai-acp-client`
 
-`get_session_state()` on the bridge harness wrappers currently
-returns an empty capability set. Once the live session response is
-exposed via `JaiAcpClient` (or via reading the persona's
-`_client_session_future`), populating `available_models`,
-`session_modes`, and `config_options` is straightforward.
+Both packages provide `IInputToolbarRegistryFactory`; only one wins
+in JupyterLab DI. Currently a paper cut (the bridge's read-only badge
+loses gracefully if outranked); becomes load-bearing once we add
+multiple toolbar items in G1. Cleanest fix is upstream in
+`@jupyter/chat` — either expose `IInputToolbarRegistry` as a token
+directly, or make the registry composable across plugins.
 
 ### G4. Fake-ACP-agent integration test
 
 A protocol-correct fake agent that advertises specific
 models/modes/config-options would let us assert end-to-end that the
-selectors render the advertised capabilities. Pending G2 + G3.
+selectors render the advertised capabilities. Worthwhile once G1 is
+in.
 
 ### G5. Additional harness adapters
 
 Currently registered: Claude Code, OpenCode. The contrib package has
 adapters for Codex, Copilot, Gemini, Goose, Kiro, and Mistral Vibe;
 each is a few-line addition under `harnesses/`. None block the PoC.
+
+### G6. Per-chat agent identity selector + ACP Registry (P3, deferred)
+
+Zed shows `Claude Agent ▾` at the top-left of the chat panel; click
+opens an agent picker plus a marketplace of installable ACP servers
+("Add More Agents"). Deferred — the augmented `+ New chat` dialog
+already covers picking an agent at chat creation, and the registry
+piece is its own design problem.
