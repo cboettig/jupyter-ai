@@ -5,6 +5,8 @@ import { HarnessInfo, ChatBridgeState } from '../types';
 import { getState, listHarnesses } from '../api';
 import { HarnessBadge } from './HarnessBadge';
 import { ModelSelector } from './ModelSelector';
+import { ModeSelector } from './ModeSelector';
+import { ConfigOptionsSelector } from './ConfigOptionsSelector';
 
 export interface HarnessHeaderProps {
   chatId: string;
@@ -44,10 +46,16 @@ export const HarnessHeader: React.FC<HarnessHeaderProps> = ({ chatId }) => {
   if (!matched) {
     return null;
   }
+  // Zed-style row: badge → model → mode → config-options. Each child
+  // self-fetches state and renders nothing when the agent doesn't
+  // advertise its capability — so a harness that exposes only models
+  // shows badge + model, an "everything" harness shows all four.
   return (
     <span className="jp-acp-bridge-bound-row">
       <HarnessBadge harness={matched} />
       <ModelSelector chatId={chatId} />
+      <ModeSelector chatId={chatId} />
+      <ConfigOptionsSelector chatId={chatId} />
     </span>
   );
 };

@@ -190,7 +190,9 @@
   gap: 6px;
 }
 
-.jp-acp-bridge-model-selector {
+.jp-acp-bridge-model-selector,
+.jp-acp-bridge-mode-selector,
+.jp-acp-bridge-config-select {
   height: 24px;
   padding: 0 6px;
   background: var(--jp-layout-color1);
@@ -199,6 +201,32 @@
   border-radius: 3px;
   font-family: var(--jp-ui-font-family);
   font-size: var(--jp-ui-font-size1);
+}
+
+.jp-acp-bridge-config-bool,
+.jp-acp-bridge-config-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px;
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 3px;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+}
+
+.jp-acp-bridge-config-text > input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  margin-left: 4px;
+  width: 8em;
 }
 
 /* Bound-state badge */

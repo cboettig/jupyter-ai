@@ -7,9 +7,16 @@ export interface HarnessInfo {
 export interface ModelInfo {
   id: string;
   name: string;
+  description?: string;
 }
 
 export interface SessionMode {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface ConfigOptionChoice {
   id: string;
   name: string;
 }
@@ -17,7 +24,13 @@ export interface SessionMode {
 export interface ConfigOption {
   id: string;
   name: string;
+  /** ACP `category` hint — `'model'` / `'mode'` mirror dedicated fields and
+   *  are filtered out of generic rendering, anything else is shown. */
+  category?: string;
+  /** ACP `type`: `'select'` or `'boolean'`. */
+  kind?: string;
   value: unknown;
+  options?: ConfigOptionChoice[];
 }
 
 export interface AvailableCommand {
