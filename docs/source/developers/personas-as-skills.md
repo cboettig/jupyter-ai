@@ -235,7 +235,7 @@ better served by waiting for that standard to mature and then
 adopting it as it adopted ACP, than by inventing a Jupyter-specific
 mashup now.
 
-A reasonable position, then:
+Our position, then:
 
 - The hello-world persona — what 90% of users want, and what makes
   the expert-contribution flywheel turn — should be a Skill. Easy to
