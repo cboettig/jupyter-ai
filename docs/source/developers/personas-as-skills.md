@@ -25,10 +25,10 @@ The Personas vision makes that contribution surface explicit.
 This document doesn't argue against Personas. It argues that the
 *format* for declaring one — what a persona physically *is* — has,
 since the persona-manager was designed, converged on an open standard
-in the broader ecosystem. Aligning with that standard makes the
-expert-user contribution surface lower-friction *and* portable beyond
-Jupyter, and that combination is what determines whether a community
-of expert-authored personas actually accumulates.
+in the broader ecosystem (Agent Client Protocol / ACP). Aligning with that standard
+makes the expert-user contribution surface lower-friction *and* portable beyond Jupyter,
+and that combination is what determines whether a community of expert-authored personas
+actually accumulates.
 
 ## Three axes that aren't always one thing
 
