@@ -84,31 +84,56 @@ class BridgeRouterIntegration:
             pm.personas.pop(pid, None)
 
     def _on_chat_init(self, room_id: str, ychat: Any) -> None:
-        """Restore a previously-bound harness on chat reopen, and install
-        the per-chat msg observer."""
+        """Install the per-chat msg observer and schedule restore-from-
+        metadata. The actual rebind is deferred to the next event-loop
+        tick because the router fires its `chat_init` observers in
+        registration order, and `jupyter-ai-persona-manager`'s observer
+        (which writes `persona_managers[room_id]`) runs *after* ours —
+        so calling `persona_managers.get(room_id)` synchronously here
+        always returns None on the very first chat-init for that room.
+        """
         bridge = self.bridge_manager.get_or_create(room_id)
         bridge.ychat = ychat
 
-        # Hide upstream @-mention ACP personas regardless of binding state —
-        # the bridge owns the ACP entry path now.
-        self._suppress_acp_client_personas(self.persona_managers.get(room_id))
-
-        meta = ychat.get_metadata().get("acp_bridge")
-        if meta and "harness_id" in meta:
-            try:
-                adapter = self.registry.get(meta["harness_id"])
-                if bridge.is_draft:
-                    pm = self.persona_managers.get(room_id)
-                    # Persona must be parented to its PersonaManager so it
-                    # can resolve event_loop, log, fileid_manager via
-                    # `self.parent.<attr>`. Mirrors `bind_chat()` below.
-                    bridge.bind(adapter, parent=pm)
-                    if pm is not None:
-                        pm.default_persona_id = None
-            except HarnessNotFoundError:
-                pass
         if self.router is not None:
             self.router.observe_chat_msg(room_id, self._make_msg_handler(room_id))
+
+        try:
+            asyncio.get_event_loop().call_soon(
+                self._restore_binding_from_metadata, room_id, ychat
+            )
+        except RuntimeError:
+            # No running loop — invoke synchronously and accept that the
+            # parent reference may be missing.
+            self._restore_binding_from_metadata(room_id, ychat)
+
+    def _restore_binding_from_metadata(self, room_id: str, ychat: Any) -> None:
+        """Look up `acp_bridge.harness_id` in chat metadata and rebind.
+
+        Runs deferred from `_on_chat_init` so peer extensions have had
+        a chance to populate their state for this room (specifically,
+        `persona_managers[room_id]`). Idempotent.
+        """
+        pm = self.persona_managers.get(room_id)
+        # Hide upstream @-mention ACP personas now that pm has its
+        # personas registered.
+        self._suppress_acp_client_personas(pm)
+
+        meta = ychat.get_metadata().get("acp_bridge") if ychat is not None else None
+        if not (meta and "harness_id" in meta):
+            return
+        try:
+            adapter = self.registry.get(meta["harness_id"])
+        except HarnessNotFoundError:
+            return
+        bridge = self.bridge_manager.get_or_create(room_id)
+        if not bridge.is_draft:
+            return
+        # Persona must be parented to its PersonaManager so it can
+        # resolve event_loop, log, fileid_manager via `self.parent.<attr>`.
+        bridge.bind(adapter, parent=pm)
+        if pm is not None:
+            pm.default_persona_id = None
 
     def _make_msg_handler(self, room_id: str):
         def handler(rid: str, message: Any) -> None:
