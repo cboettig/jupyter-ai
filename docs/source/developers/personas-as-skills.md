@@ -231,7 +231,7 @@ opencode in the same chat" — the right answer is almost certainly
 It's an emerging-standards problem, with [Google's A2A
 (Agent-to-Agent)](https://google.github.io/A2A/) and similar
 multi-agent protocols starting to settle the design. Jupyter is
-better served by *waiting* for that standard to mature and then
+better served by waiting for that standard to mature and then
 adopting it as it adopted ACP, than by inventing a Jupyter-specific
 mashup now.
 
