@@ -61,7 +61,7 @@ for the mechanics.
 | `augmentCreate.ts` | Replaces the chat extension's `jupyterlab-chat:create` command with our wrapper. See [Augmented chat creation](#augmented-chat-creation). |
 | `components/HarnessHeader.tsx` | Toolbar row composer for bound vs unbound chats. |
 | `components/HarnessBadge.tsx` | Read-only label for bound state. |
-| `components/HarnessPicker.tsx` | Dropdown picker — currently only used by the `newChatDialog` body, but kept exported as a primitive. |
+| `components/HarnessPicker.tsx` | Dropdown picker (button + popover, click-outside dismiss). **Vestigial** — was rendered when the picker lived in the chat-input toolbar; today the augmented `+ New chat` dialog uses vanilla DOM (`newChatDialog.ts`), not this component. Kept exported as a primitive in case it's useful for follow-on work; deletable if it bothers you. |
 | `components/ModelSelector.tsx`, `ModeSelector.tsx`, `ConfigOptionsSelector.tsx` | Capability selectors — each self-fetches `/state`, returns null if the capability is empty. |
 | `components/HarnessToolbarItem.tsx` | Wrapper that mounts `HarnessHeader` into a chat-input toolbar slot. |
 | `providers/BridgeSlashCommandProvider.ts` | `/`-command completion against the bound persona's advertised commands. |

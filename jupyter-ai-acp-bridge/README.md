@@ -17,12 +17,16 @@ selector. Pick a harness when you create the chat (Claude Code, OpenCode,
 …) and the chat is bound to that harness for its lifetime — the same model
 Zed uses for its agent panel. To use a different harness, start a new chat.
 
-Inside a bound chat the input toolbar shows the harness badge plus, when the
-harness advertises models, a model `<select>` for picking among them
-(Claude Code exposes Default / Sonnet / Haiku). The chat input gets
-harness-aware slash-command completion (`/help`, `/permissions`, etc.,
-populated from whatever the harness advertises) and `@<filename>` completion
-against the workspace.
+Inside a bound chat the input toolbar shows a Zed-style row of
+capability selectors — model, mode (Default / Accept Edits / Plan Mode /
+Don't Ask / Bypass Permissions for Claude Code; plan / build for
+OpenCode), any other config-options the harness advertises — followed
+by a read-only label identifying the bound agent. Each selector renders
+only when the harness actually advertises that capability, so a harness
+that exposes only models simply hides the mode selector. The chat
+input also gets harness-aware slash-command completion (`/<skill-name>`
+populated from whatever the harness's skills directory advertises) and
+`@<filename>` completion against the workspace.
 
 When the bridge is installed it suppresses the legacy `@`-mention ACP
 personas (`@Claude`, `@OpenCode`, …) from `jupyter-ai-acp-client`, since
@@ -98,23 +102,22 @@ Pick a harness and a name in the dialog. Send a message. That's the demo.
 This is a PoC, deliberately scoped to demonstrate the architectural pattern.
 Concrete in-flight follow-ups, with their TODO links:
 
-1. **Mode and config-option toolbar items not yet rendered.** Only the model
-   selector is mounted in the chat input toolbar. The `ModeSelector` and
-   `ConfigOptionsSelector` React components exist and the backend state is
-   populated, but the Zed-style separate-toolbar-items layout (with mode +
-   model hidden when `config_options` is present) is the next deliverable
-   (P2 Step 2 in `TODO.md`).
-
-2. **No reactive push for `CurrentModeUpdate` / `ConfigOptionUpdate`.** If
+1. **No reactive push for `CurrentModeUpdate` / `ConfigOptionUpdate`.** If
    the agent emits one of these `SessionUpdate` events mid-session (e.g.
    a slash command toggles plan/build), our cached state lags until the
-   next `/state` request. Cheap fix is poll-on-focus; push is a follow-up
-   (P2 Step 3).
+   next `/state` request. The dropdowns work for *user-driven* mode
+   changes; only agent-initiated changes drift out of sync. Cheap fix
+   is poll-on-focus; push is a follow-up (P2 Step 3).
+
+2. **Image paste (Ctrl+V) into the chat input.** Zed lets you paste an
+   image directly; our chat input requires the attach button. The paste
+   path lives in `@jupyter/chat`'s editor, not here.
 
 3. **Toolbar-factory conflict with `jupyter-ai-acp-client`.** Both
    packages provide `IInputToolbarRegistryFactory`; only one wins in
-   JupyterLab DI. Becomes load-bearing once we add multiple toolbar items
-   in P2 Step 2; cleanest fix is upstream in `@jupyter/chat`.
+   JupyterLab DI. Cleanest fix is upstream in `@jupyter/chat` —
+   either expose `IInputToolbarRegistry` as a JupyterFrontEnd token,
+   or make the registry composable across plugins.
 
 4. **No effort selector, no per-chat agent-identity selector at the top
    of the panel, no ACP Registry / "Add More Agents" flow.** All deferred;

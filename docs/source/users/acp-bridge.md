@@ -51,30 +51,47 @@ for the full install/verify/run flow.
    isn't supported — same constraint Zed has, since the agent's session
    state is harness-specific.
 
-For chats bound to a harness that advertises a model list (Claude Code
-exposes Default / Sonnet / Haiku, for example), a model `<select>` appears
-next to the harness badge in the chat input toolbar.
+Inside a bound chat the chat-input toolbar shows a Zed-style row of
+selectors driven entirely by what the harness advertises:
+
+- **Model** picker — Claude Code exposes `Default (recommended)` /
+  `Sonnet` / `Haiku`; OpenCode exposes its own list of configured
+  models.
+- **Mode** picker — Claude Code: `Default` / `Accept Edits` /
+  `Plan Mode` / `Don't Ask` / `Bypass Permissions`. OpenCode: `plan`
+  / `build`.
+- Any other agent-advertised **config options** (Boolean toggles,
+  Select dropdowns, free-text), de-duplicated against the model/mode
+  pickers when the agent advertises them through both surfaces.
+- A read-only **harness label** at the end of the row identifying the
+  bound agent.
+
+Each selector renders only when the harness actually advertises that
+capability, so a harness that only exposes models simply hides the
+mode picker. Slash commands typed in the chat input (e.g. `/<skill-name>`)
+auto-complete from the harness's advertised commands and forward to
+the agent for evaluation — agents that load skills at the start of a
+prompt (like `claude-agent-acp`) work end-to-end.
 
 ## Limitations of the preview
 
-- **Mode and config-option selectors aren't rendered yet.** Only the
-  model selector is mounted. Mode (plan / build, accept-edits, bypass…)
-  and config-options exist as backend state and as standalone React
-  components, but the toolbar layout work to render them as separate
-  Zed-style toolbar items is still in progress (P2 Step 2 in the repo
-  TODO).
-- **No live updates for mode/config changes.** If the agent emits a
-  `CurrentModeUpdate` or `ConfigOptionUpdate` during a session (e.g., a
-  slash command toggles plan/build), the bridge's tracked state catches
-  up only on the next `/state` poll. Reactive push (or simple polling)
-  is P2 Step 3.
+- **Agent-initiated mode changes lag the UI.** The user-facing dropdown
+  works for changing model/mode; what's not yet wired is the reverse
+  direction — if the agent flips mode internally (via its own slash
+  command, say) the dropdown reflects the change only on the next
+  reload. Reactive polling / push is P2 Step 3 in the repo TODO.
+- **No image paste (`Ctrl+V`) into the chat input.** Zed lets you paste
+  an image directly; here you have to use the attach button. Lives in
+  `@jupyter/chat`'s editor, not in the bridge.
 - **No effort selector.** Effort levels aren't carried by the ACP
   protocol — Zed has them as a hardcoded property of certain Claude
   model IDs. Out of scope for this PoC.
 - **No mid-thread harness switching.** Intentional, matches Zed.
 - **No per-chat agent identity selector at the top of the chat panel,
-  no ACP Registry / "Add More Agents" flow.** Both deferred until the
-  rest of the toolbar selectors land — see the repo TODO for the plan.
+  no ACP Registry / "Add More Agents" flow.** Both deferred — the
+  augmented `+ New chat` dialog already covers chat-creation-time
+  selection, and a registry of installable ACP servers is its own
+  design problem.
 
 See `docs/superpowers/specs/2026-04-28-acp-bridge-design.md` for the full
 design rationale and the developer page below for an architectural map.
