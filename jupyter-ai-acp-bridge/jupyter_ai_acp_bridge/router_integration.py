@@ -28,6 +28,35 @@ from .registry import HarnessNotFoundError, HarnessRegistry
 _ACP_CLIENT_PERSONAS_MODULE = "jupyter_ai_acp_client.acp_personas"
 
 
+def _prune_acp_client_persona_classes() -> None:
+    """Remove acp-client entries from `PersonaManager._ep_persona_classes`
+    (a ClassVar) so future PersonaManager instances skip them at
+    `_init_personas()` time — preventing fresh chats from instantiating
+    and registering them as YChat users in the first place.
+
+    Safe to call before the cache is populated (returns silently);
+    idempotent once it's pruned. Once any chat has been opened the cache
+    is populated and the prune sticks for the rest of the process.
+    """
+    try:
+        from jupyter_ai_persona_manager.persona_manager import PersonaManager
+    except ImportError:
+        return
+    classes = PersonaManager._ep_persona_classes
+    if not isinstance(classes, list):
+        return
+    PersonaManager._ep_persona_classes = [
+        c
+        for c in classes
+        if not (
+            (cls := c.get("persona_class")) is not None
+            and getattr(cls, "__module__", "").startswith(
+                _ACP_CLIENT_PERSONAS_MODULE
+            )
+        )
+    ]
+
+
 class BridgeRouterIntegration:
     def __init__(
         self,
@@ -69,19 +98,60 @@ class BridgeRouterIntegration:
         return room_id, getattr(pm, "ychat", None)
 
     def _suppress_acp_client_personas(self, pm: Any) -> None:
-        """Remove auto-discovered `jupyter-ai-acp-client` personas from a
-        PersonaManager so they don't appear in @-mention completion. The
-        bridge supersedes them; same subprocess, single canonical entry
-        path (launcher cards). Idempotent — safe to call repeatedly."""
-        if pm is None or not hasattr(pm, "personas"):
+        """Remove auto-discovered `jupyter-ai-acp-client` personas so they
+        don't appear in routing OR in @-mention completion. The bridge
+        supersedes them; same subprocess, single canonical entry path.
+
+        Three places to clean up:
+          1. `PersonaManager._ep_persona_classes` (class-level cache):
+             prune the acp-client entries so *future* PersonaManager
+             instances (i.e. new chats opened later) don't even
+             instantiate them. Each persona class's `__init__` calls
+             `ychat.set_user()`, so preventing instantiation is the only
+             way to keep the YChat user list clean for fresh chats.
+          2. `pm.personas` (this PM): kills the dispatch path. Without
+             this `@Claude` would still route through `on_chat_message`'s
+             mention dispatch even after we hide it from the picker.
+          3. `pm.ychat._yusers` (this PM): kills the @-mention
+             completion for this already-open chat. Each persona
+             registered itself as a YChat user during instantiation;
+             popping from `_yusers` removes the entry from the dropdown.
+             Note this only sticks on the *current* chat — if the user
+             reloads, Y-doc state may resync the entry from peers; (1)
+             prevents new instantiations from re-adding.
+
+        Idempotent — safe to call repeatedly.
+        """
+        # Step 0: prune the class-level cache once. Cheap to re-run; the
+        # filter is a no-op once the entries are already gone.
+        _prune_acp_client_persona_classes()
+
+        if pm is None:
             return
-        to_remove = [
-            pid
-            for pid, persona in list(pm.personas.items())
-            if type(persona).__module__.startswith(_ACP_CLIENT_PERSONAS_MODULE)
-        ]
-        for pid in to_remove:
-            pm.personas.pop(pid, None)
+        # Step 1: drop from pm.personas. While we're walking, collect the
+        # ids of personas we're suppressing so we can also strip them
+        # from the YChat user list.
+        suppressed_ids: list[str] = []
+        if hasattr(pm, "personas"):
+            for pid, persona in list(pm.personas.items()):
+                if type(persona).__module__.startswith(
+                    _ACP_CLIENT_PERSONAS_MODULE
+                ):
+                    suppressed_ids.append(pid)
+                    pm.personas.pop(pid, None)
+        # Step 2: drop those ids from ychat._yusers. Best-effort: if
+        # YChat changes its internal storage we just log and move on.
+        ychat = getattr(pm, "ychat", None)
+        yusers = getattr(ychat, "_yusers", None)
+        if yusers is None:
+            return
+        for pid in suppressed_ids:
+            try:
+                if pid in yusers:
+                    del yusers[pid]
+            except Exception:
+                # Don't let a failed user-pop block the bind.
+                pass
 
     def _on_chat_init(self, room_id: str, ychat: Any) -> None:
         """Install the per-chat msg observer and schedule restore-from-
@@ -91,6 +161,12 @@ class BridgeRouterIntegration:
         (which writes `persona_managers[room_id]`) runs *after* ours —
         so calling `persona_managers.get(room_id)` synchronously here
         always returns None on the very first chat-init for that room.
+
+        Also subscribes to YChat metadata changes: if the Y-doc was
+        reset on this connect (the chat extension logs "Clearing YDoc
+        source before handshake" when client/server disagree), the
+        first restore attempt will see empty metadata; we re-attempt
+        each time metadata changes until the binding takes.
         """
         bridge = self.bridge_manager.get_or_create(room_id)
         bridge.ychat = ychat
@@ -107,33 +183,63 @@ class BridgeRouterIntegration:
             # parent reference may be missing.
             self._restore_binding_from_metadata(room_id, ychat)
 
+        # Subscribe to metadata changes: idempotent retry when metadata
+        # arrives via Yjs sync after our first attempt. Defer the actual
+        # restore work to the next event-loop tick — the observer fires
+        # synchronously inside the Yjs transaction, and our bind path
+        # itself calls `ychat.set_metadata(...)`, which would otherwise
+        # recursively re-enter the observer mid-transaction. Doing the
+        # work post-tick lets the transaction complete first.
+        try:
+            ymeta = getattr(ychat, "_ymetadata", None)
+            if ymeta is not None and hasattr(ymeta, "observe"):
+                def _on_metadata_change(_event: Any) -> None:
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        return
+                    loop.call_soon(
+                        self._restore_binding_from_metadata, room_id, ychat
+                    )
+                ymeta.observe(_on_metadata_change)
+        except Exception:
+            # If we can't subscribe, the deferred restore is the only
+            # attempt. Fail open.
+            pass
+
     def _restore_binding_from_metadata(self, room_id: str, ychat: Any) -> None:
         """Look up `acp_bridge.harness_id` in chat metadata and rebind.
 
         Runs deferred from `_on_chat_init` so peer extensions have had
         a chance to populate their state for this room (specifically,
-        `persona_managers[room_id]`). Idempotent.
+        `persona_managers[room_id]`). Idempotent — returns early when
+        metadata isn't yet populated, when the harness is unknown, or
+        when the bridge is already bound.
         """
-        pm = self.persona_managers.get(room_id)
-        # Hide upstream @-mention ACP personas now that pm has its
-        # personas registered.
-        self._suppress_acp_client_personas(pm)
-
-        meta = ychat.get_metadata().get("acp_bridge") if ychat is not None else None
-        if not (meta and "harness_id" in meta):
-            return
         try:
-            adapter = self.registry.get(meta["harness_id"])
-        except HarnessNotFoundError:
-            return
-        bridge = self.bridge_manager.get_or_create(room_id)
-        if not bridge.is_draft:
-            return
-        # Persona must be parented to its PersonaManager so it can
-        # resolve event_loop, log, fileid_manager via `self.parent.<attr>`.
-        bridge.bind(adapter, parent=pm)
-        if pm is not None:
-            pm.default_persona_id = None
+            pm = self.persona_managers.get(room_id)
+            self._suppress_acp_client_personas(pm)
+
+            meta = ychat.get_metadata().get("acp_bridge") if ychat is not None else None
+            if not (meta and "harness_id" in meta):
+                return
+            try:
+                adapter = self.registry.get(meta["harness_id"])
+            except HarnessNotFoundError:
+                return
+            bridge = self.bridge_manager.get_or_create(room_id)
+            if not bridge.is_draft:
+                return
+            # Persona must be parented to its PersonaManager so it can
+            # resolve event_loop, log, fileid_manager via `self.parent.<attr>`.
+            bridge.bind(adapter, parent=pm)
+            if pm is not None:
+                pm.default_persona_id = None
+        except Exception:
+            import logging
+            logging.getLogger("ServerApp").exception(
+                "[acp-bridge] _restore_binding crashed for %s", room_id
+            )
 
     def _make_msg_handler(self, room_id: str):
         def handler(rid: str, message: Any) -> None:

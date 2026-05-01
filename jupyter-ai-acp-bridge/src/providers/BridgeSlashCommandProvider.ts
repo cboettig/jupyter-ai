@@ -20,10 +20,16 @@ export class BridgeSlashCommandProvider implements IChatCommandProvider {
     }
     const chatId = inputModel.chatContext.name;
     const commands = await listCommands(chatId);
+    // ACP advertises command names without the leading slash (e.g.
+    // `help`, `mode`); the user typed `word` *with* a leading `/`.
+    // Match against the slash-stripped prefix and re-attach `/` in the
+    // surfaced completion so the chat-input replaces `/he` with
+    // `/help` rather than with `help`.
+    const prefix = word.slice(1);
     return commands
-      .filter(c => c.name.startsWith(word))
+      .filter(c => c.name.startsWith(prefix))
       .map(c => ({
-        name: c.name,
+        name: '/' + c.name,
         providerId: this.id,
         description: c.description,
         spaceOnAccept: true
