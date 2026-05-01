@@ -1,6 +1,6 @@
 # Personas as Skills
 
-*A note on how the per-thread harness binding work in this fork sits
+*A note on how the per-chat harness binding work in this fork sits
 inside the original Personas vision in `jupyter-ai-persona-manager`,
 and a friendly suggestion for how that vision might align with where
 the broader open agent ecosystem is converging.*
@@ -16,7 +16,7 @@ AI" and to suggest where each belongs.
 The Personas surface in `jupyter-ai-persona-manager` was a strong
 design call. It frames the right thing: the user — and especially the
 *expert user* — should be able to shape a conversation with a
-domain-specific bundle of context, identity, and tools, *per thread*,
+domain-specific bundle of context, identity, and tools, *per chat*,
 without that shaping leaking elsewhere. That's exactly what scientists
 need to bring their accumulated expertise into AI-assisted work
 without surrendering it to whatever generic assistant a vendor ships.
@@ -59,7 +59,7 @@ specific conflations worth naming:
    different model is now a different persona, and changing models —
    for cost or capability reasons — forces a redefinition.
 
-The per-thread ACP harness binding in this fork separates axis 1 from
+The per-chat ACP harness binding in this fork separates axis 1 from
 axis 3 at the chat layer: a chat is bound to one harness, and the
 harness's models/modes/skills are surfaced as separate selectors. But
 it doesn't, on its own, say what a *persona* should be — it just stops
@@ -175,7 +175,7 @@ quietly being used for two genuinely different things:
 2. **Heavyweight isolated specialist.** "Send this sub-task to a
    sqlAgent that runs in its own session, with its own conversation
    history, and only returns a summary." A separate worker
-   conversation that the main thread spawns and consumes.
+   conversation that the main chat spawns and consumes.
 
 These solve different problems. The first is about user-adopted
 context shaping (the Personas vision, narrowly). The second is about
@@ -193,7 +193,7 @@ There's a real tension here, and skipping past it would be
 unconvincing. Defenders of `Persona = ACP-session-per-class` will
 correctly point out that giving each persona its own ACP session
 delivers context isolation: the persona's reasoning, tool calls, and
-internal state don't pollute the main thread. That isolation is
+internal state don't pollute the main chat. That isolation is
 sometimes genuinely valuable.
 
 The argument here isn't "isolation doesn't matter." It's that ACP is
