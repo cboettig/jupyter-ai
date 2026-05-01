@@ -287,9 +287,9 @@ Aligning with those standards — especially for the common case where
 alignment is essentially free — turns the Personas vision from "the
 way Jupyter AI does this thing" into "the way Jupyter AI participates
 in how the open ecosystem does this thing." The expert-user surface
-gets *wider* (any skills-compatible tool can host a Jupyter-authored
-persona), more *durable* (a persona library survives Jupyter version
-churn and the rise/fall of any single tool), and more *generative*
+gets wider (any skills-compatible tool can host a Jupyter-authored
+persona), more durable (a persona library survives Jupyter version
+churn and the rise/fall of any single tool), and more generative
 (Jupyter contributors and ecosystem contributors share one library
 rather than maintaining parallel ones).
 
