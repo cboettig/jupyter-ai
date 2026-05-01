@@ -252,8 +252,8 @@ Our position, then:
 
 ## What the bridge actually does today
 
-This fork's bridge gives you the substrate for the reframe even
-without any further upstream change:
+This fork's bridge (between the Jupyter IDE and the LLM harness) gives you the substrate
+for the reframe even without any further upstream change:
 
 - It stops calling the harness a persona. Each chat is bound to one
   harness via the augmented `+ New chat` dialog; harness selection is
