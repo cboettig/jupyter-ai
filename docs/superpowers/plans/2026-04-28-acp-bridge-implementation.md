@@ -1,5 +1,20 @@
 # `jupyter-ai-acp-bridge` Implementation Plan
 
+> ⚠️ **Historical artifact.** This document is the *initial* TDD task
+> list, frozen at its 2026-04-28 state. It was used to bootstrap the
+> PoC. Many of its specifics are now obsolete — for example, the
+> "Real ACP RPC for set-model / set-mode / set-config-option" gap was
+> closed; the slash-command provider got a non-trivial fix to handle
+> the router's slash-vs-msg observer split; the picker UI moved from a
+> first-message picker to an augmented `+ New chat` dialog; etc.
+>
+> For the **current** architecture and gotchas, read
+> [`docs/source/developers/acp-bridge-rationale.md`](../../source/developers/acp-bridge-rationale.md).
+> For live status, read
+> [`jupyter-ai-acp-bridge/TODO.md`](../../../jupyter-ai-acp-bridge/TODO.md).
+> Refer to this document only as a historical record of how the PoC was
+> sketched out before the implementation surfaced its real edge cases.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a working PoC of `jupyter-ai-acp-bridge` per the design at `docs/superpowers/specs/2026-04-28-acp-bridge-design.md`: a per-thread ACP harness binding for Jupyter AI with capability-driven model/mode/config-options selectors and slash/mention pass-through, wired up for one harness (Claude Code).
