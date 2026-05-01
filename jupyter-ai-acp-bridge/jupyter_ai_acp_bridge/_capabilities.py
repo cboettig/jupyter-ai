@@ -100,19 +100,42 @@ class AcpBridgeCapabilityMixin:
                     selected_mode_id = modes_state.current_mode_id
 
             for opt in getattr(response, "config_options", None) or []:
-                # ConfigOptions can be Boolean or Select — surface a flat
-                # shape with `kind` so the frontend can render either.
+                # ConfigOptions can be Boolean or Select. ACP schema field
+                # names: outer option uses `current_value` (not `value`);
+                # Select choices use `value`/`name` (no `id`).
                 kind = getattr(opt, "type", None) or type(opt).__name__
                 config_options.append(
                     {
                         "id": opt.id,
                         "name": getattr(opt, "name", opt.id),
                         "kind": kind,
-                        "value": getattr(opt, "value", None),
+                        "category": getattr(opt, "category", None),
+                        "value": getattr(opt, "current_value", None),
                         "options": [
-                            {"id": o.id, "name": getattr(o, "name", o.id)}
+                            {
+                                "id": o.value,
+                                "name": getattr(o, "name", o.value),
+                            }
                             for o in getattr(opt, "options", None) or []
                         ],
+                    }
+                )
+
+        # `_acp_slash_commands` is populated by BaseAcpPersona from
+        # `AvailableCommandsUpdate` events — those are Pydantic AvailableCommand
+        # objects, not JSON-serializable dicts. Flatten before returning.
+        raw_commands = getattr(self, "_acp_slash_commands", []) or []
+        available_commands: list[dict] = []
+        for cmd in raw_commands:
+            if hasattr(cmd, "model_dump"):
+                available_commands.append(cmd.model_dump(by_alias=True))
+            elif isinstance(cmd, dict):
+                available_commands.append(cmd)
+            else:
+                available_commands.append(
+                    {
+                        "name": getattr(cmd, "name", str(cmd)),
+                        "description": getattr(cmd, "description", None),
                     }
                 )
 
@@ -122,9 +145,7 @@ class AcpBridgeCapabilityMixin:
             "selected_mode_id": selected_mode_id,
             "session_modes": session_modes,
             "config_options": config_options,
-            "available_commands": list(
-                getattr(self, "_acp_slash_commands", []) or []
-            ),
+            "available_commands": available_commands,
         }
 
     async def set_session_model(self, model_id: str) -> None:
