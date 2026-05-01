@@ -192,7 +192,7 @@ second deserves its own name and its own proposal.
 ## On isolation: the legitimate concern, and why ACP isn't the layer
 
 There's a real tension here, and skipping past it would be
-unconvincing. Defenders of `Persona = ACP-session-per-class` will
+unconvincing. Proponents of `Persona = ACP-session-per-class` will
 correctly point out that giving each persona its own ACP session
 delivers context isolation: the persona's reasoning, tool calls, and
 internal state don't pollute the main chat. That isolation is
