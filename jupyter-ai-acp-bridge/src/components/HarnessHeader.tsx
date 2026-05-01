@@ -46,16 +46,19 @@ export const HarnessHeader: React.FC<HarnessHeaderProps> = ({ chatId }) => {
   if (!matched) {
     return null;
   }
-  // Zed-style row: badge → model → mode → config-options. Each child
-  // self-fetches state and renders nothing when the agent doesn't
-  // advertise its capability — so a harness that exposes only models
-  // shows badge + model, an "everything" harness shows all four.
+  // Zed-style row: model → mode → config-options → harness label.
+  // The badge sits at the end as a read-only identity tag, distinct
+  // from the peer dropdowns so users don't try to click it (mid-thread
+  // harness switching isn't supported). Each child self-fetches state
+  // and renders nothing when the agent doesn't advertise its
+  // capability — a harness that exposes only models shows just model
+  // + label, an "everything" harness shows all four.
   return (
     <span className="jp-acp-bridge-bound-row">
-      <HarnessBadge harness={matched} />
       <ModelSelector chatId={chatId} />
       <ModeSelector chatId={chatId} />
       <ConfigOptionsSelector chatId={chatId} />
+      <HarnessBadge harness={matched} />
     </span>
   );
 };

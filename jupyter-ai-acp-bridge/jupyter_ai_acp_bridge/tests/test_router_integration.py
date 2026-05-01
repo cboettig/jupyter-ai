@@ -10,12 +10,18 @@ class _FakeRouter:
     def __init__(self):
         self.chat_init_observers = []
         self.chat_msg_observers: dict = {}
+        self.slash_cmd_observers: dict = {}
 
     def observe_chat_init(self, cb):
         self.chat_init_observers.append(cb)
 
     def observe_chat_msg(self, room_id, cb):
         self.chat_msg_observers.setdefault(room_id, []).append(cb)
+
+    def observe_slash_cmd_msg(self, room_id, pattern, cb):
+        self.slash_cmd_observers.setdefault(room_id, {}).setdefault(
+            pattern, []
+        ).append(cb)
 
 
 class _FakeYChat:

@@ -11,6 +11,7 @@ from chat metadata when a chat reopens.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from typing import Any, Optional
 
 from jupyter_ai_persona_manager.persona_manager import (
@@ -173,6 +174,17 @@ class BridgeRouterIntegration:
 
         if self.router is not None:
             self.router.observe_chat_msg(room_id, self._make_msg_handler(room_id))
+            # The router routes `/`-prefixed messages to slash_cmd_observers
+            # ONLY, not chat_msg_observers — so without this second
+            # registration, every `/help`, `/mode plan`, `/<skill-name>`
+            # the user submits would be silently dropped from the bridge's
+            # perspective. We register a wildcard pattern that the
+            # handler then filters down to commands the bound agent
+            # actually advertises (so we don't double-handle
+            # `/refresh-personas` etc. that other extensions own).
+            self.router.observe_slash_cmd_msg(
+                room_id, ".*", self._make_slash_msg_handler(room_id)
+            )
 
         try:
             asyncio.get_event_loop().call_soon(
@@ -240,6 +252,48 @@ class BridgeRouterIntegration:
             logging.getLogger("ServerApp").exception(
                 "[acp-bridge] _restore_binding crashed for %s", room_id
             )
+
+    def _make_slash_msg_handler(self, room_id: str):
+        """Re-route slash-prefixed messages back to the bound persona.
+
+        The router strips the `/<command>` prefix before invoking us
+        (callback signature: `(rid, command, trimmed_message)`). To make
+        the agent see the original text — claude-agent-acp's slash-skill
+        loader expects the literal `/<command>` at the start of the
+        prompt — we reconstruct the body before dispatch.
+
+        Filters down to commands the *bound persona* actually advertises
+        in its `_acp_slash_commands`. Without this filter the wildcard
+        pattern `.*` would forward `/refresh-personas` (jupyter-ai's
+        built-in) and similar to the agent, which would just confuse it.
+        """
+        def handler(rid: str, command: str, message: Any) -> None:
+            bridge = self.bridge_manager.lookup(rid)
+            if bridge is None or not bridge.is_bound:
+                return
+            sender = getattr(message, "sender", "") or ""
+            if is_persona(sender) or sender == SYSTEM_USERNAME:
+                return
+            persona = getattr(bridge, "_persona", None)
+            if persona is None:
+                return
+            agent_commands = getattr(persona, "_acp_slash_commands", []) or []
+            if not any(getattr(c, "name", None) == command for c in agent_commands):
+                # Not an agent-advertised slash command — let whoever
+                # else owns this pattern (e.g. jupyter-ai's
+                # `/refresh-personas`) handle it.
+                return
+            rest = getattr(message, "body", "") or ""
+            original_body = "/" + command + ((" " + rest) if rest else "")
+            try:
+                rebuilt = replace(message, body=original_body)
+            except Exception:
+                # If `message` isn't a dataclass for some reason, fall
+                # back to mutating in-place.
+                message.body = original_body
+                rebuilt = message
+            asyncio.create_task(bridge.dispatch_message(rebuilt))
+        return handler
 
     def _make_msg_handler(self, room_id: str):
         def handler(rid: str, message: Any) -> None:

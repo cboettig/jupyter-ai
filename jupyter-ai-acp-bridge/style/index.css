@@ -229,17 +229,22 @@
   width: 8em;
 }
 
-/* Bound-state badge */
+/* Read-only label, not a button — distinct visual weight from the
+ * model/mode selectors so users don't try to click it. Also pushed to
+ * the right of its row via `margin-left: auto` so it groups with the
+ * selectors but reads as a label/identity tag rather than a peer
+ * control. */
 .jp-acp-bridge-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
   height: 24px;
-  background: var(--jp-layout-color2);
-  color: var(--jp-ui-font-color1);
-  border: 1px solid var(--jp-border-color1);
-  border-radius: 3px;
+  padding: 0 6px;
+  margin-left: auto;
+  color: var(--jp-ui-font-color2);
   font-family: var(--jp-ui-font-family);
   font-size: var(--jp-ui-font-size1);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
