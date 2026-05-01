@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { HarnessInfo, ChatBridgeState } from '../types';
 import { getState, listHarnesses } from '../api';
 import { HarnessBadge } from './HarnessBadge';
+import { ModelSelector } from './ModelSelector';
 
 export interface HarnessHeaderProps {
   chatId: string;
@@ -40,5 +41,13 @@ export const HarnessHeader: React.FC<HarnessHeaderProps> = ({ chatId }) => {
     );
   }
   const matched = harnesses.find(h => h.id === state.harness_id);
-  return matched ? <HarnessBadge harness={matched} /> : null;
+  if (!matched) {
+    return null;
+  }
+  return (
+    <span className="jp-acp-bridge-bound-row">
+      <HarnessBadge harness={matched} />
+      <ModelSelector chatId={chatId} />
+    </span>
+  );
 };
