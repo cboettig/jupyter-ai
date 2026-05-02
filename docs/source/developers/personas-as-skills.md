@@ -1,6 +1,6 @@
 # Personas as Skills
 
-*A note on how the per-thread harness binding work in this fork sits
+*A note on how the per-chat harness binding work in this fork sits
 inside the original Personas vision in `jupyter-ai-persona-manager`,
 and a friendly suggestion for how that vision might align with where
 the broader open agent ecosystem is converging.*
@@ -16,7 +16,7 @@ AI" and to suggest where each belongs.
 The Personas surface in `jupyter-ai-persona-manager` was a strong
 design call. It frames the right thing: the user — and especially the
 *expert user* — should be able to shape a conversation with a
-domain-specific bundle of context, identity, and tools, *per thread*,
+domain-specific bundle of context, identity, and tools, *per chat*,
 without that shaping leaking elsewhere. That's exactly what scientists
 need to bring their accumulated expertise into AI-assisted work
 without surrendering it to whatever generic assistant a vendor ships.
@@ -25,10 +25,10 @@ The Personas vision makes that contribution surface explicit.
 This document doesn't argue against Personas. It argues that the
 *format* for declaring one — what a persona physically *is* — has,
 since the persona-manager was designed, converged on an open standard
-in the broader ecosystem. Aligning with that standard makes the
-expert-user contribution surface lower-friction *and* portable beyond
-Jupyter, and that combination is what determines whether a community
-of expert-authored personas actually accumulates.
+in the broader ecosystem (Agent Client Protocol / ACP). Aligning with that standard
+makes the expert-user contribution surface lower-friction *and* portable beyond Jupyter,
+and that combination is what determines whether a community of expert-authored personas
+actually accumulates.
 
 ## Three axes that aren't always one thing
 
@@ -59,13 +59,16 @@ specific conflations worth naming:
    different model is now a different persona, and changing models —
    for cost or capability reasons — forces a redefinition.
 
-The per-thread ACP harness binding in this fork separates axis 1 from
+The per-chat ACP harness binding in this fork separates axis 1 from
 axis 3 at the chat layer: a chat is bound to one harness, and the
 harness's models/modes/skills are surfaced as separate selectors. But
 it doesn't, on its own, say what a *persona* should be — it just stops
 calling the harness one.
 
 ## What is a Persona, really?
+
+Our proposal is to have a more robust definition of a persona; instead of a thing you
+can `@`, a persona has a specific scope of responsibility.
 
 Strip away the implementation, and a persona is a **bundle of context
 loaded into a conversation**:
@@ -150,8 +153,7 @@ That's not a knock on `BasePersona`'s design. It predates the
 convergence of the Skills standard and was a sensible choice at its
 time. But its packaging requirements have a real cost:
 
-- Authoring a persona requires Python knowledge and JupyterLab
-  packaging knowledge.
+- Authoring a persona requires Python coding and packaging knowledge.
 - Personas can't be shared across chat surfaces — your jupyter-ai
   persona doesn't work in your terminal, and vice versa.
 - Persona libraries don't pool with the broader community; everyone
@@ -175,7 +177,7 @@ quietly being used for two genuinely different things:
 2. **Heavyweight isolated specialist.** "Send this sub-task to a
    sqlAgent that runs in its own session, with its own conversation
    history, and only returns a summary." A separate worker
-   conversation that the main thread spawns and consumes.
+   conversation that the main chat spawns and consumes.
 
 These solve different problems. The first is about user-adopted
 context shaping (the Personas vision, narrowly). The second is about
@@ -190,10 +192,10 @@ second deserves its own name and its own proposal.
 ## On isolation: the legitimate concern, and why ACP isn't the layer
 
 There's a real tension here, and skipping past it would be
-unconvincing. Defenders of `Persona = ACP-session-per-class` will
+unconvincing. Proponents of `Persona = ACP-session-per-class` will
 correctly point out that giving each persona its own ACP session
 delivers context isolation: the persona's reasoning, tool calls, and
-internal state don't pollute the main thread. That isolation is
+internal state don't pollute the main chat. That isolation is
 sometimes genuinely valuable.
 
 The argument here isn't "isolation doesn't matter." It's that ACP is
@@ -229,11 +231,11 @@ opencode in the same chat" — the right answer is almost certainly
 It's an emerging-standards problem, with [Google's A2A
 (Agent-to-Agent)](https://google.github.io/A2A/) and similar
 multi-agent protocols starting to settle the design. Jupyter is
-better served by *waiting* for that standard to mature and then
+better served by waiting for that standard to mature and then
 adopting it as it adopted ACP, than by inventing a Jupyter-specific
 mashup now.
 
-A reasonable position, then:
+Our position, then:
 
 - The hello-world persona — what 90% of users want, and what makes
   the expert-contribution flywheel turn — should be a Skill. Easy to
@@ -250,8 +252,8 @@ A reasonable position, then:
 
 ## What the bridge actually does today
 
-This fork's bridge gives you the substrate for the reframe even
-without any further upstream change:
+This fork's bridge (between the Jupyter IDE and the LLM harness) gives you the substrate
+for the reframe even without any further upstream change:
 
 - It stops calling the harness a persona. Each chat is bound to one
   harness via the augmented `+ New chat` dialog; harness selection is
@@ -285,9 +287,9 @@ Aligning with those standards — especially for the common case where
 alignment is essentially free — turns the Personas vision from "the
 way Jupyter AI does this thing" into "the way Jupyter AI participates
 in how the open ecosystem does this thing." The expert-user surface
-gets *wider* (any skills-compatible tool can host a Jupyter-authored
-persona), more *durable* (a persona library survives Jupyter version
-churn and the rise/fall of any single tool), and more *generative*
+gets wider (any skills-compatible tool can host a Jupyter-authored
+persona), more durable (a persona library survives Jupyter version
+churn and the rise/fall of any single tool), and more generative
 (Jupyter contributors and ecosystem contributors share one library
 rather than maintaining parallel ones).
 
