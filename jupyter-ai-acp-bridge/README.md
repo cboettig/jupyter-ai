@@ -1,7 +1,7 @@
 # jupyter-ai-acp-bridge
 
 A proof-of-concept JupyterLab extension that demonstrates a Zed-style
-per-thread ACP harness binding model for Jupyter AI. See the design rationale
+per-chat ACP harness binding model for Jupyter AI. See the design rationale
 at [issue #1558](https://github.com/jupyterlab/jupyter-ai/issues/1558) and the
 full design spec at [`docs/superpowers/specs/2026-04-28-acp-bridge-design.md`](../docs/superpowers/specs/2026-04-28-acp-bridge-design.md).
 

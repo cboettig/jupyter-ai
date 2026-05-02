@@ -1,6 +1,6 @@
 # ACP harness selector (preview)
 
-The `jupyter-ai-acp-bridge` package adds Zed-style per-thread ACP harness
+The `jupyter-ai-acp-bridge` package adds Zed-style per-chat ACP harness
 binding to Jupyter AI as a preview. Each new chat is bound to one ACP
 harness for its lifetime; switching harness means starting a new chat.
 
@@ -47,7 +47,7 @@ for the full install/verify/run flow.
    **Agent** selector — pick a name and a harness (Claude Code, OpenCode,
    …) in the same step and hit **Create**.
 3. The chat opens already bound to the chosen harness; type and send.
-4. To use a different harness, start a new chat. Mid-thread switching
+4. To use a different harness, start a new chat. Mid-chat switching
    isn't supported — same constraint Zed has, since the agent's session
    state is harness-specific.
 
@@ -86,7 +86,7 @@ prompt (like `claude-agent-acp`) work end-to-end.
 - **No effort selector.** Effort levels aren't carried by the ACP
   protocol — Zed has them as a hardcoded property of certain Claude
   model IDs. Out of scope for this PoC.
-- **No mid-thread harness switching.** Intentional, matches Zed.
+- **No mid-chat harness switching.** Intentional, matches Zed.
 - **No per-chat agent identity selector at the top of the chat panel,
   no ACP Registry / "Add More Agents" flow.** Both deferred — the
   augmented `+ New chat` dialog already covers chat-creation-time

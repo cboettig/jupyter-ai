@@ -1,6 +1,6 @@
 # ACP bridge: developer guide
 
-A Jupyter AI bridge that gives chats per-thread ACP-harness binding
+A Jupyter AI bridge that gives chats per-chat ACP-harness binding
 (Zed-style), rather than the `@`-mention-as-harness model. This is the
 canonical orientation doc for anyone editing
 [`jupyter-ai-acp-bridge/`](../../../jupyter-ai-acp-bridge/) — it's
@@ -26,7 +26,7 @@ the design spec at
 Per [issue #1558](https://github.com/jupyterlab/jupyter-ai/issues/1558):
 ACP harnesses shouldn't be exposed as `@`-mentionable personas because
 that conflates harness selection with model selection and breaks
-per-thread context isolation. A chat is bound to one harness for its
+per-chat context isolation. A chat is bound to one harness for its
 life; capability-driven toolbar selectors (model, session mode,
 config options) come straight from what the harness advertises.
 
@@ -308,7 +308,7 @@ double-rendered.
   hypothetical agent that only advertises models shows `model + label`.
 - The harness label is at the **end** and styled flat (no border, no
   background, all-caps, muted color) so it reads as a trailing
-  identity tag rather than a peer button. Rebinding mid-thread isn't
+  identity tag rather than a peer button. Rebinding mid-chat isn't
   supported — making it look unclickable signals that intent.
 - The toolbar item itself is registered via the `IInputToolbarRegistryFactory`
   pattern (`toolbarPlugin` in `index.ts`).
